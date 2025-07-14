@@ -217,16 +217,30 @@ const App = () => {
         <div className="calendar-container">
           {loading ? (
             <div className="loading">Carregando...</div>
-          ) : availability && Array.isArray(availability.slots) ? (
-            availability.slots.length > 0 ? (
-              <div className="time-slots">
-                {availability.slots.map((slot, index) => renderTimeSlot(slot, index))}
-              </div>
-            ) : (
-              <div className="no-data">Nenhum horário disponível</div>
-            )
           ) : (
-            <div className="no-data">Nenhum dado disponível</div>
+            (() => {
+              // Suporte para resposta { slots: [...] } ou diretamente [...]
+              let slots = [];
+              if (availability && Array.isArray(availability.slots)) {
+                slots = availability.slots;
+              } else if (Array.isArray(availability)) {
+                slots = availability;
+              }
+              // slots SEMPRE deve conter todos os horários do dia, disponíveis ou não
+              if (Array.isArray(slots) && slots.length > 0) {
+                return (
+                  <div className="time-slots">
+                    {slots.map((slot, index) => renderTimeSlot(slot, index))}
+                  </div>
+                );
+              } else if (Array.isArray(slots) && slots.length === 0) {
+                // Se slots veio vazio, provavelmente erro na API, mas nunca deve acontecer
+                return <div className="no-data">Nenhum horário cadastrado para este dia</div>;
+              } else {
+                // Caso slots não seja array, erro de integração
+                return <div className="no-data">Erro ao carregar horários</div>;
+              }
+            })()
           )}
         </div>
         {/* 

@@ -59,15 +59,8 @@ app.get('/api/appointments', (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
-        
-        // Formatar as datas para ISO string para garantir compatibilidade
-        const formattedRows = rows.map(row => ({
-            ...row,
-            start_time: new Date(row.start_time).toISOString(),
-            end_time: new Date(row.end_time).toISOString()
-        }));
-        
-        res.json(formattedRows);
+        // Retornar as datas como estão no banco de dados
+        res.json(rows);
     });
 });
 
@@ -142,7 +135,7 @@ app.delete('/api/appointments/:id', (req, res) => {
 // Rota para verificar disponibilidade de horários
 app.get('/api/availability/:date', (req, res) => {
     const { date } = req.params;
-    
+    console.log('Recebida requisição de disponibilidade para data:', date);
     // Buscar todos os agendamentos para a data especificada
     db.all(
         'SELECT title, name, start_time, end_time FROM appointments WHERE date(start_time) = date(?)',
@@ -153,19 +146,17 @@ app.get('/api/availability/:date', (req, res) => {
                 res.status(500).json({ error: err.message });
                 return;
             }
-            
+            console.log('Agendamentos encontrados:', rows.length, rows);
             // Definir horário de funcionamento (8h às 18h)
             const businessHours = {
                 start: 8,
                 end: 18
             };
-            
             // Criar slots de 1 hora
             const slots = [];
             for (let hour = businessHours.start; hour < businessHours.end; hour++) {
                 const slotStart = `${hour.toString().padStart(2, '0')}:00`;
                 const slotEnd = `${(hour + 1).toString().padStart(2, '0')}:00`;
-                
                 // Encontrar o agendamento que conflita com o slot atual
                 const booking = rows.find(b => {
                     // As datas do banco já estão no formato ISO completo
@@ -173,7 +164,6 @@ app.get('/api/availability/:date', (req, res) => {
                     const bookingEnd = new Date(b.end_time);
                     const slotStartDate = new Date(`${date}T${slotStart}:00.000Z`);
                     const slotEndDate = new Date(`${date}T${slotEnd}:00.000Z`);
-                    
                     // Lógica de sobreposição de horários
                     return (
                         (slotStartDate >= bookingStart && slotStartDate < bookingEnd) ||
@@ -181,7 +171,6 @@ app.get('/api/availability/:date', (req, res) => {
                         (slotStartDate <= bookingStart && slotEndDate >= bookingEnd)
                     );
                 });
-
                 slots.push({
                     start_time: slotStart,
                     end_time: slotEnd,
@@ -189,8 +178,7 @@ app.get('/api/availability/:date', (req, res) => {
                     appointment: booking ? { title: booking.title, name: booking.name } : null
                 });
             }
-            
-            console.log(`Disponibilidade para ${date}: ${slots.length} slots gerados.`);
+            console.log(`Disponibilidade para ${date}: ${slots.length} slots gerados.`, slots);
             res.json({ slots });
         }
     );
