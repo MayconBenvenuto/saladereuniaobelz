@@ -187,8 +187,8 @@ async def get_availability(appointment_date: str):
             
             # Check if this slot conflicts with any appointment
             for appointment in appointments:
-                appt_start = datetime.fromisoformat(appointment["start_time"]).time()
-                appt_end = datetime.fromisoformat(appointment["end_time"]).time()
+                appt_start = time.fromisoformat(appointment["start_time"])
+                appt_end = time.fromisoformat(appointment["end_time"])
                 
                 if check_time_overlap(current_time, slot_end, appt_start, appt_end):
                     slot_available = False
