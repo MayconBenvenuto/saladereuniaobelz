@@ -109,8 +109,8 @@ class BelzMeetingRoomAPITester:
         conflicting_data = {
             "name": "Ana Costa",
             "date": "2025-02-15",
-            "start_time": "09:30",  # Overlaps with previous appointment
-            "end_time": "10:30",
+            "start_time": "14:30",  # Overlaps with previous appointment (14:00-15:00)
+            "end_time": "15:30",
             "title": "Reunião Conflitante",
             "participants": "Carlos Lima"
         }
