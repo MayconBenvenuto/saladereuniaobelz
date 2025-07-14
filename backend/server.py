@@ -4,14 +4,11 @@ from pydantic import BaseModel
 from datetime import datetime, date, time, timedelta
 from typing import Optional, List
 import os
-from motor.motor_asyncio import AsyncIOMotorClient
+import sqlite3
 import uuid
-from bson import ObjectId
 import logging
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
+from contextlib import contextmanager
+import threading
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -28,14 +25,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# MongoDB connection
-MONGO_URL = os.environ.get('MONGO_URL')
-if not MONGO_URL:
-    raise ValueError("MONGO_URL environment variable is required")
-
-client = AsyncIOMotorClient(MONGO_URL)
-db = client.meeting_room_db
-appointments_collection = db.appointments
+# SQLite database setup
+DATABASE_PATH = "/app/backend/meeting_room.db"
+db_lock = threading.Lock()
 
 # Pydantic models
 class AppointmentCreate(BaseModel):
@@ -59,18 +51,50 @@ class AppointmentResponse(BaseModel):
 class AvailabilityRequest(BaseModel):
     date: date
 
+# Database helper functions
+@contextmanager
+def get_db_connection():
+    """Context manager for database connections"""
+    with db_lock:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+def init_database():
+    """Initialize SQLite database with required tables"""
+    with get_db_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS appointments (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                date TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NOT NULL,
+                title TEXT NOT NULL,
+                participants TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+
+# Initialize database on startup
+init_database()
+
 # Helper functions
-def appointment_to_dict(appointment: dict) -> dict:
-    """Convert MongoDB appointment to response format"""
+def appointment_from_row(row) -> dict:
+    """Convert SQLite row to appointment dict"""
     return {
-        "id": appointment["id"],
-        "name": appointment["name"],
-        "date": appointment["date"],
-        "start_time": appointment["start_time"],
-        "end_time": appointment["end_time"],
-        "title": appointment["title"],
-        "participants": appointment.get("participants"),
-        "created_at": appointment["created_at"]
+        "id": row["id"],
+        "name": row["name"],
+        "date": row["date"],
+        "start_time": row["start_time"],
+        "end_time": row["end_time"],
+        "title": row["title"],
+        "participants": row["participants"],
+        "created_at": row["created_at"]
     }
 
 def time_to_minutes(time_obj: time) -> int:
@@ -90,55 +114,59 @@ def check_time_overlap(start1: time, end1: time, start2: time, end2: time) -> bo
 
 @app.get("/api/")
 async def root():
-    return {"message": "Belz Meeting Room Booking API"}
+    return {"message": "Belz Meeting Room Booking API with SQLite"}
 
 @app.post("/api/appointments", response_model=AppointmentResponse, status_code=201)
 async def create_appointment(appointment: AppointmentCreate):
     """Create a new appointment"""
     try:
         # Check for conflicts
-        existing_appointments = await appointments_collection.find({
-            "date": appointment.date.isoformat()
-        }).to_list(length=None)
-        
-        for existing in existing_appointments:
-            existing_start = time.fromisoformat(existing["start_time"])
-            existing_end = time.fromisoformat(existing["end_time"])
+        with get_db_connection() as conn:
+            existing_appointments = conn.execute(
+                "SELECT * FROM appointments WHERE date = ?",
+                (appointment.date.isoformat(),)
+            ).fetchall()
             
-            if check_time_overlap(appointment.start_time, appointment.end_time, existing_start, existing_end):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Time conflict with existing appointment: {existing['title']} by {existing['name']}"
-                )
+            for existing in existing_appointments:
+                existing_start = time.fromisoformat(existing["start_time"])
+                existing_end = time.fromisoformat(existing["end_time"])
+                
+                if check_time_overlap(appointment.start_time, appointment.end_time, existing_start, existing_end):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Time conflict with existing appointment: {existing['title']} by {existing['name']}"
+                    )
         
         # Create new appointment
         appointment_id = str(uuid.uuid4())
-        appointment_doc = {
-            "id": appointment_id,
-            "name": appointment.name,
-            "date": appointment.date.isoformat(),
-            "start_time": appointment.start_time.isoformat(),
-            "end_time": appointment.end_time.isoformat(),
-            "title": appointment.title,
-            "participants": appointment.participants,
-            "created_at": datetime.now().isoformat()
-        }
+        created_at = datetime.now()
         
-        result = await appointments_collection.insert_one(appointment_doc)
+        with get_db_connection() as conn:
+            conn.execute("""
+                INSERT INTO appointments (id, name, date, start_time, end_time, title, participants, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                appointment_id,
+                appointment.name,
+                appointment.date.isoformat(),
+                appointment.start_time.isoformat(),
+                appointment.end_time.isoformat(),
+                appointment.title,
+                appointment.participants,
+                created_at.isoformat()
+            ))
+            conn.commit()
         
-        if result.inserted_id:
-            return AppointmentResponse(
-                id=appointment_id,
-                name=appointment.name,
-                date=appointment.date,
-                start_time=appointment.start_time,
-                end_time=appointment.end_time,
-                title=appointment.title,
-                participants=appointment.participants,
-                created_at=datetime.now()
-            )
-        else:
-            raise HTTPException(status_code=500, detail="Failed to create appointment")
+        return AppointmentResponse(
+            id=appointment_id,
+            name=appointment.name,
+            date=appointment.date,
+            start_time=appointment.start_time,
+            end_time=appointment.end_time,
+            title=appointment.title,
+            participants=appointment.participants,
+            created_at=created_at
+        )
             
     except Exception as e:
         logger.error(f"Error creating appointment: {str(e)}")
@@ -150,15 +178,17 @@ async def create_appointment(appointment: AppointmentCreate):
 async def get_appointments_by_date(appointment_date: str):
     """Get all appointments for a specific date"""
     try:
-        appointments = await appointments_collection.find({
-            "date": appointment_date
-        }).to_list(length=None)
-        
-        result = []
-        for appointment in appointments:
-            result.append(appointment_to_dict(appointment))
-        
-        return result
+        with get_db_connection() as conn:
+            appointments = conn.execute(
+                "SELECT * FROM appointments WHERE date = ? ORDER BY start_time",
+                (appointment_date,)
+            ).fetchall()
+            
+            result = []
+            for appointment in appointments:
+                result.append(appointment_from_row(appointment))
+            
+            return result
         
     except Exception as e:
         logger.error(f"Error fetching appointments: {str(e)}")
@@ -168,9 +198,11 @@ async def get_appointments_by_date(appointment_date: str):
 async def get_availability(appointment_date: str):
     """Get availability for a specific date"""
     try:
-        appointments = await appointments_collection.find({
-            "date": appointment_date
-        }).to_list(length=None)
+        with get_db_connection() as conn:
+            appointments = conn.execute(
+                "SELECT * FROM appointments WHERE date = ?",
+                (appointment_date,)
+            ).fetchall()
         
         # Generate time slots (8 AM to 8 PM in 30-minute intervals)
         time_slots = []
@@ -222,10 +254,15 @@ async def get_availability(appointment_date: str):
 async def delete_appointment(appointment_id: str):
     """Delete an appointment"""
     try:
-        result = await appointments_collection.delete_one({"id": appointment_id})
-        
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Appointment not found")
+        with get_db_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM appointments WHERE id = ?",
+                (appointment_id,)
+            )
+            conn.commit()
+            
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Appointment not found")
         
         return {"message": "Appointment deleted successfully"}
         
@@ -240,11 +277,32 @@ async def delete_appointment(appointment_id: str):
 async def health_check():
     try:
         # Test database connection
-        await db.command("ping")
-        return {"status": "healthy", "database": "connected"}
+        with get_db_connection() as conn:
+            conn.execute("SELECT 1").fetchone()
+        return {"status": "healthy", "database": "connected", "database_type": "SQLite"}
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         return {"status": "unhealthy", "database": "disconnected"}
+
+# Get all appointments (for debugging)
+@app.get("/api/appointments")
+async def get_all_appointments():
+    """Get all appointments (for debugging)"""
+    try:
+        with get_db_connection() as conn:
+            appointments = conn.execute(
+                "SELECT * FROM appointments ORDER BY date, start_time"
+            ).fetchall()
+            
+            result = []
+            for appointment in appointments:
+                result.append(appointment_from_row(appointment))
+            
+            return result
+        
+    except Exception as e:
+        logger.error(f"Error fetching all appointments: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 if __name__ == "__main__":
     import uvicorn
