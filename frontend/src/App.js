@@ -15,7 +15,7 @@ const App = () => {
     end_time: ''
   });
 
-  const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+  const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
 
   // Format date for API calls
   const formatDateForAPI = (date) => {
@@ -212,26 +212,71 @@ const App = () => {
         <div className="calendar-container">
           {loading ? (
             <div className="loading">Carregando...</div>
-          ) : availability ? (
-            <div className="time-slots">
-              {availability.slots.map((slot, index) => renderTimeSlot(slot, index))}
-            </div>
+          ) : availability && Array.isArray(availability.slots) ? (
+            availability.slots.length > 0 ? (
+              <div className="time-slots">
+                {availability.slots.map((slot, index) => renderTimeSlot(slot, index))}
+              </div>
+            ) : (
+              <div className="no-data">Nenhum horário disponível</div>
+            )
           ) : (
             <div className="no-data">Nenhum dado disponível</div>
           )}
         </div>
-      </main>
-
-      {/* Fixed booking button */}
-      <div className="booking-button-container">
-        <button 
-          className="booking-button"
+      {/* Botão flutuante para abrir modal de agendamento */}
+      <div style={{
+        position: 'fixed',
+        bottom: '32px',
+        right: '32px',
+        zIndex: 1000
+      }}>
+        <button
+          className="submit-button"
+          style={{
+            padding: '16px 32px',
+            fontSize: '1.1rem',
+            borderRadius: '50px',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'transform 0.2s, box-shadow 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-2px)';
+            e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+          }}
           onClick={() => setShowBookingModal(true)}
-          disabled={loading}
         >
+          <svg 
+            width="24" 
+            height="24" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
           Agendar Reunião
         </button>
       </div>
+      </main>
+
+      {/* Botão flutuante removido conforme solicitado */}
 
       {/* Booking modal */}
       {showBookingModal && (
