@@ -84,9 +84,9 @@ class BelzMeetingRoomAPITester:
         appointment_data = {
             "name": "João Silva",
             "date": "2025-02-15",
-            "start_time": "09:00",
-            "end_time": "10:00",
-            "title": "Reunião de Teste",
+            "start_time": "14:00",  # Changed to avoid conflict with existing appointment
+            "end_time": "15:00",
+            "title": "Reunião de Teste Nova",
             "participants": "Maria Santos, Pedro Costa"
         }
         
