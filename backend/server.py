@@ -92,7 +92,7 @@ def check_time_overlap(start1: time, end1: time, start2: time, end2: time) -> bo
 async def root():
     return {"message": "Belz Meeting Room Booking API"}
 
-@app.post("/api/appointments", response_model=AppointmentResponse)
+@app.post("/api/appointments", response_model=AppointmentResponse, status_code=201)
 async def create_appointment(appointment: AppointmentCreate):
     """Create a new appointment"""
     try:
