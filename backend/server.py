@@ -102,8 +102,8 @@ async def create_appointment(appointment: AppointmentCreate):
         }).to_list(length=None)
         
         for existing in existing_appointments:
-            existing_start = datetime.fromisoformat(existing["start_time"]).time()
-            existing_end = datetime.fromisoformat(existing["end_time"]).time()
+            existing_start = time.fromisoformat(existing["start_time"])
+            existing_end = time.fromisoformat(existing["end_time"])
             
             if check_time_overlap(appointment.start_time, appointment.end_time, existing_start, existing_end):
                 raise HTTPException(
