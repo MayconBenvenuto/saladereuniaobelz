@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
 const App = () => {
@@ -15,7 +15,9 @@ const App = () => {
     end_time: ''
   });
 
-  const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
+  const API_BASE_URL = process.env.NODE_ENV === 'production'
+    ? ''
+    : (process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001');
 
   // Format date for API calls
   const formatDateForAPI = (date) => {
@@ -37,9 +39,8 @@ const App = () => {
     return timeString.slice(0, 5); // HH:MM
   };
 
-  // Load availability when date changes
-  useEffect(() => {
-    const loadAvailability = async () => {
+  // useCallback to memoize the function and prevent re-creation
+  const loadAvailability = useCallback(async () => {
       setLoading(true);
       try {
         const dateStr = formatDateForAPI(selectedDate);
@@ -48,6 +49,7 @@ const App = () => {
           const data = await response.json();
           setAvailability(data);
         } else {
+          // Sugestão: Usar um sistema de notificação mais robusto (ex: toast)
           console.error('Failed to load availability');
         }
       } catch (error) {
@@ -55,20 +57,22 @@ const App = () => {
       } finally {
         setLoading(false);
       }
-    };
+  }, [selectedDate, API_BASE_URL]); // Dependencies for useCallback
 
+  // Load availability when date changes
+  useEffect(() => {
     loadAvailability();
-  }, [selectedDate, API_BASE_URL]);
+  }, [loadAvailability]); // useEffect depends on the memoized function
 
   // Handle date navigation
-  const navigateDate = (direction) => {
+  const navigateDate = useCallback((direction) => {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() + direction);
     setSelectedDate(newDate);
-  };
+  }, [selectedDate]);
 
   // Handle slot selection
-  const handleSlotClick = (slot) => {
+  const handleSlotClick = useCallback((slot) => {
     if (slot.available) {
       setSelectedSlot(slot);
       setBookingForm({
@@ -77,12 +81,13 @@ const App = () => {
         end_time: slot.end_time.slice(0, 5)
       });
     }
-  };
+  }, [bookingForm]);
 
   // Handle booking form submission
-  const handleBookingSubmit = async (e) => {
+  const handleBookingSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!bookingForm.name || !bookingForm.title || !bookingForm.start_time || !bookingForm.end_time) {
+      // Sugestão: Usar um sistema de notificação mais robusto (ex: toast)
       alert('Por favor, preencha todos os campos obrigatórios');
       return;
     }
@@ -107,6 +112,7 @@ const App = () => {
       });
 
       if (response.ok) {
+        // Sugestão: Usar um sistema de notificação mais robusto (ex: toast)
         alert('Agendamento realizado com sucesso!');
         setShowBookingModal(false);
         setBookingForm({
@@ -116,15 +122,11 @@ const App = () => {
           start_time: '',
           end_time: ''
         });
-        // Reload availability
-        const dateStr = formatDateForAPI(selectedDate);
-        const availabilityResponse = await fetch(`${API_BASE_URL}/api/availability/${dateStr}`);
-        if (availabilityResponse.ok) {
-          const data = await availabilityResponse.json();
-          setAvailability(data);
-        }
+        // Reload availability by calling the memoized function
+        loadAvailability();
       } else {
         const error = await response.json();
+        // Sugestão: Usar um sistema de notificação mais robusto (ex: toast)
         alert(`Erro ao agendar: ${error.detail}`);
       }
     } catch (error) {
@@ -133,7 +135,7 @@ const App = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [bookingForm, selectedDate, API_BASE_URL, loadAvailability]);
 
   // Render time slot
   const renderTimeSlot = (slot, index) => {
@@ -162,6 +164,7 @@ const App = () => {
 
   return (
     <div className="app">
+      {/* Sugestão: Extrair para um componente <Header /> */}
       {/* Header with meeting room image and logo */}
       <header className="header">
         <div className="header-content">
@@ -189,6 +192,7 @@ const App = () => {
 
       {/* Main content */}
       <main className="main-content">
+        {/* Sugestão: Extrair para um componente <DateNavigator /> */}
         {/* Date navigation */}
         <div className="date-navigation">
           <button 
@@ -208,6 +212,7 @@ const App = () => {
           </button>
         </div>
 
+        {/* Sugestão: Extrair para um componente <TimeSlotsGrid /> */}
         {/* Calendar/Time slots */}
         <div className="calendar-container">
           {loading ? (
@@ -224,60 +229,26 @@ const App = () => {
             <div className="no-data">Nenhum dado disponível</div>
           )}
         </div>
-      {/* Botão flutuante para abrir modal de agendamento */}
-      <div style={{
-        position: 'fixed',
-        bottom: '32px',
-        right: '32px',
-        zIndex: 1000
-      }}>
-        <button
-          className="submit-button"
-          style={{
-            padding: '16px 32px',
-            fontSize: '1.1rem',
-            borderRadius: '50px',
-            cursor: 'pointer',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            backgroundColor: '#007bff',
-            color: 'white',
-            border: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'transform 0.2s, box-shadow 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.transform = 'translateY(-2px)';
-            e.target.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.transform = 'translateY(0)';
-            e.target.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-          }}
-          onClick={() => setShowBookingModal(true)}
-        >
-          <svg 
-            width="24" 
-            height="24" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
+        {/* 
+          Sugestão: Extrair para um componente <FloatingActionButton /> 
+          e mover todos os estilos para um arquivo .css para melhor manutenibilidade.
+        */}
+        <div className="floating-action-button-container">
+          <button
+            className="floating-action-button"
+            onClick={() => setShowBookingModal(true)}
           >
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="16"/>
-            <line x1="8" y1="12" x2="16" y2="12"/>
-          </svg>
-          Agendar Reunião
-        </button>
-      </div>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="16"/>
+              <line x1="8" y1="12" x2="16" y2="12"/>
+            </svg>
+            Agendar Reunião
+          </button>
+        </div>
       </main>
 
-      {/* Botão flutuante removido conforme solicitado */}
-
+      {/* Sugestão: Extrair para um componente <BookingModal /> */}
       {/* Booking modal */}
       {showBookingModal && (
         <div className="modal-overlay">
@@ -309,7 +280,11 @@ const App = () => {
                   <input
                     type="date"
                     value={formatDateForAPI(selectedDate)}
-                    onChange={(e) => setSelectedDate(new Date(e.target.value))}
+                    // Adiciona 'T00:00:00' para evitar problemas de fuso horário
+                    // que podem fazer a data voltar um dia.
+                    onChange={(e) => {
+                      setSelectedDate(new Date(e.target.value + 'T00:00:00'))
+                    }}
                   />
                 </div>
               </div>

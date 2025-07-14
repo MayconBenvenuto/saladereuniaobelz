@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
@@ -10,8 +11,15 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Cria o diretório 'data' na raiz do projeto se ele não existir
+const dataDir = path.join(__dirname, '..', 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    console.log(`Diretório de dados criado em: ${dataDir}`);
+}
+
 // Conectar ao banco de dados SQLite
-const dbPath = path.join(__dirname, 'meeting_room.db');
+const dbPath = path.join(dataDir, 'meeting_room.db');
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Erro ao conectar ao banco de dados:', err);
@@ -137,7 +145,7 @@ app.get('/api/availability/:date', (req, res) => {
     
     // Buscar todos os agendamentos para a data especificada
     db.all(
-        'SELECT start_time, end_time FROM appointments WHERE date(start_time) = date(?)',
+        'SELECT title, name, start_time, end_time FROM appointments WHERE date(start_time) = date(?)',
         [date],
         (err, rows) => {
             if (err) {
@@ -158,24 +166,27 @@ app.get('/api/availability/:date', (req, res) => {
                 const slotStart = `${hour.toString().padStart(2, '0')}:00`;
                 const slotEnd = `${(hour + 1).toString().padStart(2, '0')}:00`;
                 
-                // Verificar se o slot está disponível
-                const isAvailable = !rows.some(booking => {
-                    const bookingStart = new Date(`${date}T${booking.start_time}`);
-                    const bookingEnd = new Date(`${date}T${booking.end_time}`);
-                    const slotStartDate = new Date(`${date}T${slotStart}`);
-                    const slotEndDate = new Date(`${date}T${slotEnd}`);
+                // Encontrar o agendamento que conflita com o slot atual
+                const booking = rows.find(b => {
+                    // As datas do banco já estão no formato ISO completo
+                    const bookingStart = new Date(b.start_time);
+                    const bookingEnd = new Date(b.end_time);
+                    const slotStartDate = new Date(`${date}T${slotStart}:00.000Z`);
+                    const slotEndDate = new Date(`${date}T${slotEnd}:00.000Z`);
                     
+                    // Lógica de sobreposição de horários
                     return (
                         (slotStartDate >= bookingStart && slotStartDate < bookingEnd) ||
                         (slotEndDate > bookingStart && slotEndDate <= bookingEnd) ||
                         (slotStartDate <= bookingStart && slotEndDate >= bookingEnd)
                     );
                 });
-                
+
                 slots.push({
                     start_time: slotStart,
                     end_time: slotEnd,
-                    available: isAvailable
+                    available: !booking,
+                    appointment: booking ? { title: booking.title, name: booking.name } : null
                 });
             }
             

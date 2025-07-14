@@ -17,7 +17,7 @@
   "scripts": {
     "start": "craco start",
     "server": "node api/index.js",
-    "dev": "yarn start & yarn server",
+    "dev": "concurrently \"yarn start\" \"yarn server\"",
     "build": "craco build",
     "start:prod": "NODE_ENV=production node api/index.js",
     "test": "craco test",
@@ -38,6 +38,7 @@
   "devDependencies": {
     "@craco/craco": "^7.1.0",
     "@eslint/js": "9.23.0",
+    "concurrently": "^8.2.2",
     "autoprefixer": "^10.4.20",
     "eslint": "9.23.0",
     "eslint-plugin-import": "2.31.0",
