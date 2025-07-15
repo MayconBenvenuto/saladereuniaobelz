@@ -15,7 +15,8 @@ const App = () => {
     end_time: ''
   });
 
-  const API_BASE_URL = '';
+  // Detecta ambiente e define o endpoint da API
+  const API_BASE_URL = process.env.NODE_ENV === 'development' ? '' : process.env.REACT_APP_API_URL || '';
 
 
   // Format date for API calls

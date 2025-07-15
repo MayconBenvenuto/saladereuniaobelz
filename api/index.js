@@ -5,6 +5,7 @@ const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 // Importa e carrega as variáveis de ambiente de um arquivo .env
 require('dotenv').config();
+console.log('Iniciando backend...');
 
 // Inicializa o aplicativo Express
 const app = express();
@@ -69,6 +70,61 @@ app.get('/api/appointments', async (req, res) => {
 
   console.log('Agendamentos encontrados:', data);
   res.json(data);
+});
+
+// Rota de disponibilidade para compatibilidade com o frontend
+app.get('/api/availability/:date', async (req, res) => {
+  const { date } = req.params;
+  if (!date) {
+    return res.status(400).json({ error: 'Parâmetro de data (date) é obrigatório.' });
+  }
+  try {
+    // Buscar agendamentos do dia
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('date', date)
+      .order('start_time', { ascending: true });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    console.log('Data recebida:', date);
+    console.log('Agendamentos encontrados:', appointments);
+    // Gerar todos os horários possíveis do dia (exemplo: 08:00 às 18:00, de 30 em 30 min)
+    const startHour = 8;
+    const endHour = 18;
+    const slotDuration = 30; // minutos
+    const slots = [];
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let min = 0; min < 60; min += slotDuration) {
+        const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        const endMin = min + slotDuration;
+        let endHourSlot = hour;
+        let endMinSlot = endMin;
+        if (endMin >= 60) {
+          endHourSlot++;
+          endMinSlot = endMin - 60;
+        }
+        const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
+        // Verifica se esse slot está ocupado
+        const appointment = (appointments || []).find(appt =>
+          (start >= appt.start_time && start < appt.end_time) ||
+          (end > appt.start_time && end <= appt.end_time) ||
+          (start <= appt.start_time && end >= appt.end_time)
+        );
+        slots.push({
+          start_time: start,
+          end_time: end,
+          available: !appointment,
+          appointment: appointment || null
+        });
+      }
+    }
+    console.log('Slots gerados:', slots);
+    res.json(slots);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
 });
 
 // Criar agendamento
@@ -147,7 +203,7 @@ app.delete('/api/appointments/:id', async (req, res) => {
 });
 
 // Define a porta em que o servidor irá escutar
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
   console.log(`Acesse: http://localhost:${PORT}`);
