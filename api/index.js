@@ -9,6 +9,7 @@ app.use(bodyParser.json());
 
 // Conectar ao Supabase
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+console.log('Supabase conectado:', supabase); // Adicione este log
 
 // Buscar agendamentos por data
 app.get('/api/appointments', async (req, res) => {
@@ -17,10 +18,15 @@ app.get('/api/appointments', async (req, res) => {
   const { data, error } = await supabase
     .from('appointments')
     .select('*')
-    .eq('date', date)
+    .eq('date', date);
+  console.log('Data:', date); // Adicione este log
     .order('start_time', { ascending: true });
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) {
+    console.error('Erro ao buscar agendamentos:', error); // Adicione este log
+    return res.status(500).json({ error: error.message });
+  }
+  console.log('Agendamentos encontrados:', data); // Adicione este log
   res.json(data);
 });
 
