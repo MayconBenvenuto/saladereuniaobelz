@@ -284,11 +284,11 @@ app.post('/api/appointments', async (req, res) => {
     // Transação única: verifica conflito E cria agendamento em uma operação
     const { data: created, error } = await supabase.rpc('create_appointment_safe', {
       p_title: title,
-      p_description: description || null,
       p_name: name,
       p_date: date,
       p_start_time: start_time,
-      p_end_time: end_time
+      p_end_time: end_time,
+      p_description: description || null
     });
 
     if (error) {

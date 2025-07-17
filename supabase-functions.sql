@@ -3,11 +3,11 @@
 
 CREATE OR REPLACE FUNCTION create_appointment_safe(
   p_title TEXT,
-  p_description TEXT DEFAULT NULL,
   p_name TEXT,
   p_date DATE,
   p_start_time TIME,
-  p_end_time TIME
+  p_end_time TIME,
+  p_description TEXT DEFAULT NULL
 ) RETURNS TABLE(
   id BIGINT,
   title TEXT,
