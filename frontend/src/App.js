@@ -222,7 +222,7 @@ const App = () => {
         <div className="header-content">
           <div className="logo-container">
             <img 
-              src="https://images.unsplash.com/photo-1701500096456-28186c4a306d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwzfHxpbnN1cmFuY2UlMjBsb2dvfGVufDB8fHx8MTc1MjUxNTgwM3ww&ixlib=rb-4.1.0&q=85"
+              src="logo-belz.png"
               alt="Belz Corretora de Seguros"
               className="logo"
             />
