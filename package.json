@@ -8,7 +8,7 @@
     "build": "cd frontend && npm ci && npm run build",
     "dev": "concurrently \"cd api && node index.js\" \"cd frontend && npm start\"",
     "install-all": "npm install && cd frontend && npm install",
-    "vercel-build": "echo 'Starting Vercel build...' && cd frontend && npm ci --silent --production=false && npm run build"
+    "vercel-build": "npm install && cd frontend && npm install && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",
@@ -22,7 +22,6 @@
     "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": "18.x",
-    "npm": ">=8.0.0"
+    "node": "18.x"
   }
 }
