@@ -130,32 +130,38 @@ app.get('/api/availability/:date', async (req, res) => {
   try {
     let appointments = [];
     
-    // Buscar do Supabase com timeout muito reduzido
+    // Buscar do Supabase com timeout ajustado
     if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY && supabase) {
       try {
-        // Timeout de apenas 3 segundos para consulta rápida
+        // Timeout aumentado para 7 segundos
         const supabasePromise = supabase
           .from('appointments')
           .select('id, name, title, start_time, end_time')
           .eq('date', date)
           .order('start_time', { ascending: true });
-          
+
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout')), 3000); // 3 segundos apenas
+          setTimeout(() => reject(new Error('Timeout na consulta Supabase')), 7000); // 7 segundos
         });
-        
-        const { data: supabaseData, error } = await Promise.race([
+
+        const result = await Promise.race([
           supabasePromise,
           timeoutPromise
         ]);
-          
-        if (error) {
-          console.warn('Supabase error (usando fallback):', error.message);
+
+        if (result && result.error) {
+          console.warn('Supabase error (usando fallback):', result.error.message);
+        } else if (result && result.data) {
+          appointments = result.data || [];
         } else {
-          appointments = supabaseData || [];
+          console.warn('Resposta inesperada do Supabase:', result);
         }
       } catch (supabaseErr) {
-        console.warn('Supabase timeout (usando fallback):', supabaseErr.message);
+        if (supabaseErr.message && supabaseErr.message.includes('Timeout')) {
+          console.warn('Timeout ao consultar Supabase (usando fallback):', supabaseErr.message);
+        } else {
+          console.warn('Erro ao consultar Supabase (usando fallback):', supabaseErr.message);
+        }
       }
     }
     
