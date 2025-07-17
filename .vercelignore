@@ -1,0 +1,23 @@
+# Arquivos desnecessários para o deploy
+node_modules
+*.log
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Arquivos de desenvolvimento
+frontend/src
+frontend/public
+!frontend/build
+
+# Scripts de teste e diagnóstico
+test-*.js
+diagnose-*.js
+setup-*.js
+*.md
+!README.md
+
+# Arquivos temporários
+.DS_Store
+Thumbs.db
