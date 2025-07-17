@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : '';
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? '' // URLs relativas para produção no Vercel
+  : 'http://localhost:3001'; // URL local para desenvolvimento
 
 const App = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -51,6 +53,23 @@ const App = () => {
     setTimeout(() => setSuccess(null), 3000);
   };
 
+  // Test API connection
+  const testAPI = useCallback(async () => {
+    try {
+      const testUrl = `${API_BASE_URL}/api/test`;
+      console.log('Testando API em:', testUrl);
+      
+      const response = await fetch(testUrl);
+      const data = await response.json();
+      
+      console.log('Teste da API:', data);
+      showSuccess('API está funcionando!');
+    } catch (error) {
+      console.error('Erro no teste da API:', error);
+      showError(`Erro no teste da API: ${error.message}`);
+    }
+  }, []);
+
   // Load availability with better error handling
   const loadAvailability = useCallback(async () => {
     setLoading(true);
@@ -58,17 +77,42 @@ const App = () => {
     
     try {
       const dateStr = formatDateForAPI(selectedDate);
-      const response = await fetch(`${API_BASE_URL}/api/availability/${dateStr}`);
+      const apiUrl = `${API_BASE_URL}/api/availability/${dateStr}`;
+      
+      console.log('NODE_ENV:', process.env.NODE_ENV);
+      console.log('API_BASE_URL:', API_BASE_URL);
+      console.log('Fazendo requisição para:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response error text:', errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
+      console.log('Data recebida:', data);
+      console.log('Tipo de data:', typeof data, Array.isArray(data));
+      
       setAvailability(data);
     } catch (error) {
       console.error('Error loading availability:', error);
-      showError('Erro ao carregar disponibilidade. Verifique sua conexão e tente novamente.');
+      console.error('Error stack:', error.stack);
+      
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        showError('Erro de conexão com o servidor. Verifique se o serviço está funcionando.');
+      } else {
+        showError(`Erro ao carregar disponibilidade: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -260,6 +304,14 @@ const App = () => {
             disabled={loading}
           >
             →
+          </button>
+          {/* Botão de teste da API - remover após correção */}
+          <button 
+            className="nav-button"
+            onClick={testAPI}
+            style={{ marginLeft: '10px', backgroundColor: '#007bff', color: 'white' }}
+          >
+            Testar API
           </button>
         </div>
 

@@ -44,7 +44,18 @@ app.get('/', (req, res) => {
   res.status(200).json({ message: 'Servidor Express está rodando e conectado ao Supabase!' });
 });
 
-// Buscar agendamentos por data
+// Rota de teste para debugging
+app.get('/api/test', (req, res) => {
+  console.log('Rota de teste chamada');
+  res.status(200).json({ 
+    message: 'API teste funcionando!', 
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
+  });
+});
+
+// Buscar agendamentos por data (query parameter)
 app.get('/api/appointments', async (req, res) => {
   const { date } = req.query;
 
@@ -55,63 +66,78 @@ app.get('/api/appointments', async (req, res) => {
 
   console.log('Buscando agendamentos para a data:', date);
 
-  // **CORREÇÃO DE SINTAXE:** O .order deve ser encadeado diretamente.
-  // console.log() deve ser uma instrução separada.
-  const { data, error } = await supabase
-    .from('appointments')
-    .select('*')
-    .eq('date', date)
-    .order('start_time', { ascending: true }); // Encadenamento correto
+  try {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('date', date)
+      .order('start_time', { ascending: true });
 
-  if (error) {
-    console.error('Erro ao buscar agendamentos:', error.message); // Log mais detalhado do erro
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('Erro ao buscar agendamentos:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('Agendamentos encontrados:', data);
+    res.json(data);
+  } catch (err) {
+    console.error('Erro interno:', err);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
-
-  console.log('Agendamentos encontrados:', data);
-  res.json(data);
 });
 
-// Rota de disponibilidade para compatibilidade com o frontend
+// Rota de disponibilidade para compatibilidade com o frontend (path parameter)
 app.get('/api/availability/:date', async (req, res) => {
   const { date } = req.params;
+  
   if (!date) {
     return res.status(400).json({ error: 'Parâmetro de data (date) é obrigatório.' });
   }
+  
   try {
+    console.log('Data recebida para availability:', date);
+    
     // Buscar agendamentos do dia
     const { data: appointments, error } = await supabase
       .from('appointments')
       .select('*')
       .eq('date', date)
       .order('start_time', { ascending: true });
+      
     if (error) {
+      console.error('Erro ao buscar agendamentos:', error.message);
       return res.status(500).json({ error: error.message });
     }
-    console.log('Data recebida:', date);
+    
     console.log('Agendamentos encontrados:', appointments);
+    
     // Gerar todos os horários possíveis do dia (exemplo: 08:00 às 18:00, de 30 em 30 min)
     const startHour = 8;
     const endHour = 18;
     const slotDuration = 30; // minutos
     const slots = [];
+    
     for (let hour = startHour; hour < endHour; hour++) {
       for (let min = 0; min < 60; min += slotDuration) {
         const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
         const endMin = min + slotDuration;
         let endHourSlot = hour;
         let endMinSlot = endMin;
+        
         if (endMin >= 60) {
           endHourSlot++;
           endMinSlot = endMin - 60;
         }
+        
         const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
+        
         // Verifica se esse slot está ocupado
         const appointment = (appointments || []).find(appt =>
           (start >= appt.start_time && start < appt.end_time) ||
           (end > appt.start_time && end <= appt.end_time) ||
           (start <= appt.start_time && end >= appt.end_time)
         );
+        
         slots.push({
           start_time: start,
           end_time: end,
@@ -120,9 +146,12 @@ app.get('/api/availability/:date', async (req, res) => {
         });
       }
     }
-    console.log('Slots gerados:', slots);
+    
+    console.log(`Slots gerados: ${slots.length} slots para ${date}`);
     res.json(slots);
+    
   } catch (err) {
+    console.error('Erro interno ao gerar disponibilidade:', err);
     res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
@@ -132,51 +161,55 @@ app.post('/api/appointments', async (req, res) => {
   const { title, description, name, date, start_time, end_time } = req.body;
 
   if (!title || !name || !date || !start_time || !end_time) {
-    // Retorno de erro mais específico sobre os campos ausentes
     return res.status(400).json({ error: 'Campos obrigatórios faltando: title, name, date, start_time, end_time.' });
   }
 
   console.log(`Verificando conflitos para data: ${date}, início: ${start_time}, fim: ${end_time}`);
-  // Verificar conflito
-  const { data: conflitos, error: errorCheck } = await supabase
-    .from('appointments')
-    .select('*')
-    .eq('date', date);
+  
+  try {
+    // Verificar conflito
+    const { data: conflitos, error: errorCheck } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('date', date);
 
-  if (errorCheck) {
-    console.error('Erro ao verificar conflitos de agendamento:', errorCheck.message);
-    return res.status(500).json({ error: errorCheck.message });
+    if (errorCheck) {
+      console.error('Erro ao verificar conflitos de agendamento:', errorCheck.message);
+      return res.status(500).json({ error: errorCheck.message });
+    }
+
+    const conflitou = conflitos?.some(appt => {
+      return (
+        (start_time >= appt.start_time && start_time < appt.end_time) ||
+        (end_time > appt.start_time && end_time <= appt.end_time) ||
+        (start_time <= appt.start_time && end_time >= appt.end_time)
+      );
+    });
+
+    if (conflitou) {
+      console.log('Conflito de agendamento detectado.');
+      return res.status(409).json({ error: 'Já existe um agendamento neste horário.' });
+    }
+
+    console.log('Tentando criar novo agendamento:', { title, description, name, date, start_time, end_time });
+    
+    const { data: created, error } = await supabase
+      .from('appointments')
+      .insert([{ title, description, name, date, start_time, end_time }])
+      .select();
+
+    if (error) {
+      console.error('Erro ao criar agendamento:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('Agendamento criado com sucesso:', created[0]);
+    res.status(201).json(created[0]);
+    
+  } catch (err) {
+    console.error('Erro interno ao criar agendamento:', err);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
-
-  const conflitou = conflitos?.some(appt => {
-    // Esta lógica de conflito assume que start_time e end_time são strings comparáveis (ex: "HH:MM")
-    // ou que o banco de dados Supabase está retornando-os de forma que a comparação direta funcione.
-    // Se você estiver usando tipos de hora diferentes, pode ser necessário converter para Date objects.
-    return (
-      (start_time >= appt.start_time && start_time < appt.end_time) ||
-      (end_time > appt.start_time && end_time <= appt.end_time) ||
-      (start_time <= appt.start_time && end_time >= appt.end_time)
-    );
-  });
-
-  if (conflitou) {
-    console.log('Conflito de agendamento detectado.');
-    return res.status(409).json({ error: 'Já existe um agendamento neste horário.' });
-  }
-
-  console.log('Tentando criar novo agendamento:', { title, description, name, date, start_time, end_time });
-  const { data: created, error } = await supabase
-    .from('appointments')
-    .insert([{ title, description, name, date, start_time, end_time }])
-    .select(); // O .select() é importante para retornar os dados do registro inserido
-
-  if (error) {
-    console.error('Erro ao criar agendamento:', error.message);
-    return res.status(500).json({ error: error.message });
-  }
-
-  console.log('Agendamento criado com sucesso:', created[0]);
-  res.status(201).json(created[0]);
 });
 
 // Deletar agendamento
@@ -187,19 +220,26 @@ app.delete('/api/appointments/:id', async (req, res) => {
     return res.status(400).json({ error: 'ID do agendamento é obrigatório para exclusão.' });
   }
 
-  console.log('Deletando agendamento com ID:', id);
-  const { error } = await supabase
-    .from('appointments')
-    .delete()
-    .eq('id', id); // Certifique-se que 'id' é o nome da sua coluna de chave primária na tabela 'appointments'
+  try {
+    console.log('Deletando agendamento com ID:', id);
+    
+    const { error } = await supabase
+      .from('appointments')
+      .delete()
+      .eq('id', id);
 
-  if (error) {
-    console.error('Erro ao deletar agendamento:', error.message);
-    return res.status(500).json({ error: error.message });
+    if (error) {
+      console.error('Erro ao deletar agendamento:', error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log('Agendamento removido com sucesso, ID:', id);
+    res.json({ message: 'Agendamento removido com sucesso.' });
+    
+  } catch (err) {
+    console.error('Erro interno ao deletar agendamento:', err);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
-
-  console.log('Agendamento removido com sucesso, ID:', id);
-  res.json({ message: 'Agendamento removido com sucesso.' });
 });
 
 // Define a porta em que o servidor irá escutar
