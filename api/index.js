@@ -119,6 +119,10 @@ app.get('/api/availability/:date', async (req, res) => {
   console.log('SUPABASE_KEY exists:', !!process.env.SUPABASE_KEY);
   console.log('NODE_ENV:', process.env.NODE_ENV);
   
+  // Definir timeout para a resposta
+  req.setTimeout(40000); // 40 segundos
+  res.setTimeout(40000); // 40 segundos
+  
   if (!date) {
     console.log('ERROR: Date parameter missing');
     return res.status(400).json({ error: 'Parâmetro de data (date) é obrigatório.' });
@@ -129,15 +133,26 @@ app.get('/api/availability/:date', async (req, res) => {
     
     let appointments = [];
     
-    // Tentar buscar do Supabase, mas continuar mesmo se falhar
+    // Tentar buscar do Supabase com timeout reduzido
     if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY && supabase) {
       try {
         console.log('Tentando conectar ao Supabase...');
-        const { data: supabaseData, error } = await supabase
+        
+        // Criar promise com timeout personalizado para Supabase
+        const supabasePromise = supabase
           .from('appointments')
           .select('*')
           .eq('date', date)
           .order('start_time', { ascending: true });
+          
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Supabase timeout')), 10000); // 10 segundos timeout
+        });
+        
+        const { data: supabaseData, error } = await Promise.race([
+          supabasePromise,
+          timeoutPromise
+        ]);
           
         if (error) {
           console.error('SUPABASE ERROR (continuing anyway):', error);
@@ -146,7 +161,7 @@ app.get('/api/availability/:date', async (req, res) => {
           console.log('Dados do Supabase carregados com sucesso:', appointments.length, 'appointments');
         }
       } catch (supabaseErr) {
-        console.error('SUPABASE CONNECTION ERROR (continuing anyway):', supabaseErr);
+        console.error('SUPABASE CONNECTION ERROR (continuing anyway):', supabaseErr.message);
       }
     } else {
       console.log('Supabase not configured properly, using empty appointments');
@@ -282,6 +297,10 @@ app.post('/api/appointments', async (req, res) => {
 
   console.log(`Verificando conflitos para data: ${date}, início: ${start_time}, fim: ${end_time}`);
   
+  // Definir timeout para a resposta
+  req.setTimeout(50000); // 50 segundos
+  res.setTimeout(50000); // 50 segundos
+  
   // Verificar se o Supabase está disponível
   if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
     console.error('Supabase não está configurado. Não é possível criar agendamentos.');
@@ -291,11 +310,20 @@ app.post('/api/appointments', async (req, res) => {
   }
   
   try {
-    // Verificar conflito
-    const { data: conflitos, error: errorCheck } = await supabase
+    // Verificar conflito com timeout personalizado
+    const checkConflictPromise = supabase
       .from('appointments')
       .select('*')
       .eq('date', date);
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout ao verificar conflitos')), 15000); // 15 segundos timeout
+    });
+
+    const { data: conflitos, error: errorCheck } = await Promise.race([
+      checkConflictPromise,
+      timeoutPromise
+    ]);
 
     if (errorCheck) {
       console.error('Erro ao verificar conflitos de agendamento:', errorCheck.message);
@@ -317,10 +345,20 @@ app.post('/api/appointments', async (req, res) => {
 
     console.log('Tentando criar novo agendamento:', { title, description, name, date, start_time, end_time });
     
-    const { data: created, error } = await supabase
+    // Criar agendamento com timeout personalizado
+    const createAppointmentPromise = supabase
       .from('appointments')
       .insert([{ title, description, name, date, start_time, end_time }])
       .select();
+
+    const createTimeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Timeout ao criar agendamento')), 20000); // 20 segundos timeout
+    });
+
+    const { data: created, error } = await Promise.race([
+      createAppointmentPromise,
+      createTimeoutPromise
+    ]);
 
     if (error) {
       console.error('Erro ao criar agendamento:', error.message);
@@ -332,7 +370,11 @@ app.post('/api/appointments', async (req, res) => {
     
   } catch (err) {
     console.error('Erro interno ao criar agendamento:', err);
-    res.status(500).json({ error: 'Erro interno do servidor.' });
+    if (err.message.includes('Timeout')) {
+      res.status(504).json({ error: 'Timeout ao processar agendamento. Tente novamente.' });
+    } else {
+      res.status(500).json({ error: 'Erro interno do servidor.' });
+    }
   }
 });
 

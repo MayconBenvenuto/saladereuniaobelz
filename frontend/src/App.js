@@ -99,14 +99,19 @@ const App = () => {
       console.log('API_BASE_URL:', API_BASE_URL);
       console.log('Fazendo requisição para:', apiUrl);
       
+      // Criar controller para timeout manual (compatibilidade com todos navegadores)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 segundos
+      
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        // Adicionar timeout para produção
-        signal: AbortSignal.timeout(15000)
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
@@ -135,7 +140,9 @@ const App = () => {
       console.error('Error loading availability:', error);
       console.error('Error stack:', error.stack);
       
-      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      if (error.name === 'AbortError') {
+        showError('Timeout na conexão. Mostrando horários padrão.');
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
         showError('Erro de conexão com o servidor. Mostrando horários padrão.');
       } else if (error.name === 'TimeoutError') {
         showError('Timeout na conexão. Mostrando horários padrão.');
@@ -220,17 +227,31 @@ const App = () => {
         participants: bookingForm.participants.trim() || null
       };
 
+      // Criar controller para timeout manual (compatibilidade com todos navegadores)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos para agendamento
+
       const response = await fetch(`${API_BASE_URL}/api/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(bookingData),
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorData = await response.text();
+        let errorMessage;
+        try {
+          const parsedError = JSON.parse(errorData);
+          errorMessage = parsedError.error || `HTTP ${response.status}: ${response.statusText}`;
+        } catch {
+          errorMessage = errorData || `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       showSuccess('Agendamento realizado com sucesso!');
@@ -245,7 +266,12 @@ const App = () => {
       loadAvailability();
     } catch (error) {
       console.error('Error booking appointment:', error);
-      showError(`Erro ao agendar: ${error.message}`);
+      
+      if (error.name === 'AbortError') {
+        showError('Timeout no agendamento. Tente novamente.');
+      } else {
+        showError(`Erro ao agendar: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
