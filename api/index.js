@@ -258,32 +258,42 @@ app.post('/api/appointments', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios: title, name, date, start_time, end_time.' });
   }
 
-  // Timeout mais rápido
-  req.setTimeout(20000); // 20 segundos
-  res.setTimeout(20000); // 20 segundos
-  
+  // Timeout ajustado
+  req.setTimeout(25000); // 25 segundos
+  res.setTimeout(25000); // 25 segundos
+
   // Verificar se o Supabase está disponível
   if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
     return res.status(503).json({ 
       error: 'Serviço temporariamente indisponível. Tente novamente.' 
     });
   }
-  
+
   try {
-    // Verificar conflito com timeout de 5 segundos
-    const checkConflictPromise = supabase
-      .from('appointments')
-      .select('id, start_time, end_time')
-      .eq('date', date);
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout')), 5000); // 5 segundos
-    });
-
-    const { data: conflitos, error: errorCheck } = await Promise.race([
-      checkConflictPromise,
-      timeoutPromise
-    ]);
+    // Verificar conflito com timeout de 6 segundos
+    let conflitos = null;
+    let errorCheck = null;
+    try {
+      const checkConflictPromise = supabase
+        .from('appointments')
+        .select('id, start_time, end_time')
+        .eq('date', date);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout ao checar conflitos')), 6000); // 6 segundos
+      });
+      ({ data: conflitos, error: errorCheck } = await Promise.race([
+        checkConflictPromise,
+        timeoutPromise
+      ]));
+    } catch (err) {
+      if (err.message.includes('Timeout')) {
+        console.warn('Timeout ao checar conflitos. Retornando erro rápido.');
+        return res.status(504).json({ error: 'Timeout ao checar disponibilidade. Tente novamente.' });
+      } else {
+        console.error('Erro inesperado ao checar conflitos:', err.message);
+        return res.status(500).json({ error: 'Erro ao verificar disponibilidade.' });
+      }
+    }
 
     if (errorCheck) {
       console.error('Erro ao verificar conflitos:', errorCheck.message);
@@ -301,21 +311,31 @@ app.post('/api/appointments', async (req, res) => {
     if (conflitou) {
       return res.status(409).json({ error: 'Horário já ocupado.' });
     }
-    
-    // Criar agendamento com timeout de 10 segundos
-    const createAppointmentPromise = supabase
-      .from('appointments')
-      .insert([{ title, description, name, date, start_time, end_time }])
-      .select();
 
-    const createTimeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout')), 10000); // 10 segundos
-    });
-
-    const { data: created, error } = await Promise.race([
-      createAppointmentPromise,
-      createTimeoutPromise
-    ]);
+    // Criar agendamento com timeout de 8 segundos
+    let created = null;
+    let error = null;
+    try {
+      const createAppointmentPromise = supabase
+        .from('appointments')
+        .insert([{ title, description, name, date, start_time, end_time }])
+        .select();
+      const createTimeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout ao salvar agendamento')), 8000); // 8 segundos
+      });
+      ({ data: created, error } = await Promise.race([
+        createAppointmentPromise,
+        createTimeoutPromise
+      ]));
+    } catch (err) {
+      if (err.message.includes('Timeout')) {
+        console.warn('Timeout ao salvar agendamento. Retornando erro rápido.');
+        return res.status(504).json({ error: 'Timeout ao salvar agendamento. Tente novamente.' });
+      } else {
+        console.error('Erro inesperado ao salvar agendamento:', err.message);
+        return res.status(500).json({ error: 'Erro ao salvar agendamento.' });
+      }
+    }
 
     if (error) {
       console.error('Erro ao criar agendamento:', error.message);
@@ -323,14 +343,10 @@ app.post('/api/appointments', async (req, res) => {
     }
 
     res.status(201).json(created[0]);
-    
+
   } catch (err) {
     console.error('Erro interno:', err.message);
-    if (err.message.includes('Timeout')) {
-      res.status(504).json({ error: 'Timeout. Tente novamente em alguns segundos.' });
-    } else {
-      res.status(500).json({ error: 'Erro interno do servidor.' });
-    }
+    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
