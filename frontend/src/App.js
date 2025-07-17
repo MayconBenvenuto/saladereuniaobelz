@@ -1,18 +1,24 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './App-mobile.css';
+import { config, logDebug, logError } from './config';
+import { useApi } from './useApi';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : '';
+// Função para detectar se estamos offline
+const isOnline = () => {
+  return navigator.onLine;
+};
 
 // Cache simples para armazenar dados de disponibilidade
 const CACHE_KEY = 'meeting_room_cache';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
 const getFromCache = (key) => {
   try {
     const cached = localStorage.getItem(`${CACHE_KEY}_${key}`);
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
-      if (Date.now() - timestamp < CACHE_DURATION) {
+      // Se offline, aceitar cache mais antigo
+      const maxAge = isOnline() ? config.CACHE_DURATION : config.CACHE_DURATION_OFFLINE;
+      if (Date.now() - timestamp < maxAge) {
         return data;
       }
     }
@@ -43,8 +49,6 @@ const App = () => {
   });
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [bookingForm, setBookingForm] = useState({
     name: '',
@@ -53,6 +57,9 @@ const App = () => {
     start_time: '',
     end_time: ''
   });
+  
+  // Hook personalizado para API
+  const { loading, error, request, setError, connectionStatus, isOnline } = useApi();
 
   // Format date for API calls
   const formatDateForAPI = (date) => {
@@ -74,16 +81,15 @@ const App = () => {
     return timeString.slice(0, 5);
   };
 
-  // Show error message
-  const showError = (message) => {
-    setError(message);
-    setTimeout(() => setError(null), 5000);
-  };
-
   // Show success message
   const showSuccess = (message) => {
     setSuccess(message);
     setTimeout(() => setSuccess(null), 3000);
+  };
+
+  // Função para mostrar erro usando o hook
+  const showError = (message) => {
+    setError(message);
   };
 
   // Gerar slots otimizado usando useMemo para cache
@@ -130,55 +136,6 @@ const App = () => {
     return slots;
   }, [occupiedSlots, slotsConfig]);
 
-  // Função para fazer retry automático
-  const fetchWithRetry = async (url, options, maxRetries = 3) => {
-    let lastError;
-    
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        // Timeout progressivo: 15s, 20s, 30s
-        const timeout = 15000 + (i * 5000);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          return response;
-        }
-        
-        // Se for erro 4xx, não retry
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(`Erro ${response.status}: ${response.statusText}`);
-        }
-        
-        // Para 5xx, continua tentando
-        lastError = new Error(`Erro ${response.status}: ${response.statusText}`);
-        
-      } catch (error) {
-        lastError = error;
-        
-        if (error.name === 'AbortError') {
-          console.warn(`Tentativa ${i + 1}/${maxRetries} - Timeout`);
-        } else {
-          console.warn(`Tentativa ${i + 1}/${maxRetries} - ${error.message}`);
-        }
-        
-        // Se não for a última tentativa, aguarda antes de tentar novamente
-        if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        }
-      }
-    }
-    
-    throw lastError;
-  };
-
   // Load availability otimizado com cache e retry
   const loadAvailability = useCallback(async () => {
     const dateStr = formatDateForAPI(selectedDate);
@@ -187,21 +144,18 @@ const App = () => {
     const cached = getFromCache(dateStr);
     if (cached) {
       setOccupiedSlots(cached);
+      logDebug('Dados carregados do cache para:', dateStr);
       return;
     }
     
-    setLoading(true);
-    setError(null);
-    
     try {
-      const response = await fetchWithRetry(`${API_BASE_URL}/api/occupied-slots/${dateStr}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+      logDebug(`Carregando disponibilidade para: ${dateStr}`);
+      
+      const data = await request(`${config.API_BASE_URL}/api/occupied-slots/${dateStr}`, {
+        method: 'GET'
       });
       
-      const data = await response.json();
+      logDebug(`Dados recebidos para ${dateStr}:`, data);
       
       // Processar apenas agendamentos ocupados
       const occupied = Array.isArray(data) ? data : [];
@@ -211,39 +165,39 @@ const App = () => {
       setToCache(dateStr, occupied);
       
     } catch (error) {
-      console.error('Erro ao carregar disponibilidade:', error);
+      logError('Erro ao carregar disponibilidade:', error);
       
-      if (error.name === 'AbortError') {
-        showError('Conexão lenta. Usando dados em cache.');
-      } else {
-        showError('Problema de conexão. Dados podem estar desatualizados.');
-      }
-      
-      // Em caso de erro, usar cache expirado se disponível ou array vazio
+      // Tentar usar dados em cache mesmo se expirado
       const expiredCache = localStorage.getItem(`${CACHE_KEY}_${dateStr}`);
       if (expiredCache) {
         try {
           const { data } = JSON.parse(expiredCache);
           setOccupiedSlots(data || []);
+          showError('Usando dados em cache (pode estar desatualizado).');
         } catch {
           setOccupiedSlots([]);
+          showError('Erro de conexão. Não foi possível carregar os dados.');
         }
       } else {
         setOccupiedSlots([]);
+        if (error.includes('timeout') || error.includes('Timeout')) {
+          showError('Timeout na conexão. Tente novamente.');
+        } else {
+          showError('Erro de conexão. Tente novamente.');
+        }
       }
-      
-    } finally {
-      setLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, request]);
 
   // Load availability when date changes
   useEffect(() => {
     loadAvailability();
   }, [loadAvailability]);
 
-  // Pre-fetch próximos dias para navegação rápida
+  // Pre-fetch próximos dias para navegação rápida (desabilitado temporariamente)
   useEffect(() => {
+    // Comentado temporariamente para reduzir carga na API
+    /*
     const prefetchDays = async () => {
       const today = new Date(selectedDate);
       const promises = [];
@@ -268,9 +222,10 @@ const App = () => {
       await Promise.all(promises);
     };
     
-    // Prefetch após 2 segundos para não atrapalhar carregamento inicial
-    const timeoutId = setTimeout(prefetchDays, 2000);
+    // Prefetch após 5 segundos para não atrapalhar carregamento inicial
+    const timeoutId = setTimeout(prefetchDays, 5000);
     return () => clearTimeout(timeoutId);
+    */
   }, [selectedDate]);
 
   // Handle date navigation
@@ -323,9 +278,6 @@ const App = () => {
     e.preventDefault();
     
     if (!validateForm()) return;
-
-    setLoading(true);
-    setError(null);
     
     try {
       const bookingData = {
@@ -338,15 +290,13 @@ const App = () => {
         participants: bookingForm.participants.trim() || null
       };
 
-      const response = await fetchWithRetry(`${API_BASE_URL}/api/appointments`, {
+      await request(`${config.API_BASE_URL}/api/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(bookingData)
-      }, 2); // Só 2 tentativas para agendamento
-
-      const result = await response.json();
+      });
 
       showSuccess('Agendamento realizado com sucesso!');
       setShowBookingModal(false);
@@ -364,17 +314,15 @@ const App = () => {
       setTimeout(() => loadAvailability(), 500);
       
     } catch (error) {
-      if (error.name === 'AbortError') {
+      if (error.includes('timeout') || error.includes('Timeout')) {
         showError('Timeout no agendamento. Verifique sua conexão e tente novamente.');
-      } else if (error.message.includes('409') || error.message.includes('ocupado')) {
+      } else if (error.includes('409') || error.includes('ocupado')) {
         showError('Horário já foi ocupado por outro usuário. Escolha outro horário.');
       } else {
-        showError(error.message || 'Erro ao agendar reunião. Tente novamente.');
+        showError(error || 'Erro ao agendar reunião. Tente novamente.');
       }
-    } finally {
-      setLoading(false);
     }
-  }, [bookingForm, selectedDate, loadAvailability, fetchWithRetry]);
+  }, [bookingForm, selectedDate, loadAvailability, request]);
 
   // Render time slot otimizado com React.memo
   const renderTimeSlot = useCallback((slot, index) => {
@@ -403,6 +351,13 @@ const App = () => {
 
   return (
     <div className="app">
+      {/* Status de Conexão */}
+      {!isOnline && (
+        <div className="notification warning" style={{backgroundColor: '#ff9800', color: 'white'}}>
+          <span>⚠️ {connectionStatus === 'offline' ? 'Sem conexão' : 'Problema de conexão'}</span>
+        </div>
+      )}
+      
       {/* Notification Messages */}
       {error && (
         <div className="notification error">

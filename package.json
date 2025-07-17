@@ -5,17 +5,18 @@
   "main": "api/vercel.js",
   "scripts": {
     "start": "node api/index.js",
-    "build": "cd frontend && npm ci && npm run build",
-    "dev": "concurrently \"cd api && node index.js\" \"cd frontend && npm start\"",
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "concurrently \"npm start\" \"cd frontend && npm start\"",
     "install-all": "npm install && cd frontend && npm install",
-    "vercel-build": "npm install && cd frontend && npm install && npm run build"
+    "vercel-build": "npm install && cd frontend && npm install && npm run build",
+    "test-connection": "node test-connection-fix.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",
-    "body-parser": "^2.2.0",
+    "body-parser": "^1.20.2",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.0",
-    "express": "^5.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "node-fetch": "^3.3.2",
     "serverless-http": "^3.2.0"
   },
