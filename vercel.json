@@ -8,14 +8,20 @@
     {
       "src": "frontend/package.json",
       "use": "@vercel/static-build",
-      "config": { "outputDir": "build" }
+      "config": {
+        "buildCommand": "npm install && npm run build",
+        "outputDirectory": "build"
+      }
     }
   ],
-  "rewrites": [
-
+  "routes": [
     {
-      "source": "/((?!api/|static/).*)",
-      "destination": "/index.html"
+      "src": "/api/(.*)",
+      "dest": "/api/vercel.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/build/index.html"
     }
   ]
 }

@@ -16,6 +16,7 @@
     "test": "craco test",
     "eject": "react-scripts eject"
   },
+  "homepage": ".",
   "browserslist": {
     "production": [
       ">0.2%",

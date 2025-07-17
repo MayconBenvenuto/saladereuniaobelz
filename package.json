@@ -1,4 +1,14 @@
 {
+  "name": "saladereuniaobelz",
+  "description": "Sistema de Agendamento de Sala de Reunião - Belz Corretora de Seguros",
+  "version": "1.0.0",
+  "main": "api/vercel.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "concurrently \"cd api && node index.js\" \"cd frontend && npm start\"",
+    "install-all": "npm install && cd frontend && npm install"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",
     "body-parser": "^2.2.0",
@@ -6,5 +16,11 @@
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
