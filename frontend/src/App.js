@@ -95,13 +95,9 @@ const App = () => {
       const dateStr = formatDateForAPI(selectedDate);
       const apiUrl = `${API_BASE_URL}/api/availability/${dateStr}`;
       
-      console.log('NODE_ENV:', process.env.NODE_ENV);
-      console.log('API_BASE_URL:', API_BASE_URL);
-      console.log('Fazendo requisição para:', apiUrl);
-      
-      // Criar controller para timeout manual (compatibilidade com todos navegadores)
+      // Timeout reduzido para 8 segundos
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 segundos
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       
       const response = await fetch(apiUrl, {
         method: 'GET',
@@ -113,18 +109,11 @@ const App = () => {
       
       clearTimeout(timeoutId);
       
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error text:', errorText);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`Erro ${response.status}`);
       }
       
       const data = await response.json();
-      console.log('Data recebida:', data);
-      console.log('Tipo de data:', typeof data, Array.isArray(data));
       
       // Garantir que sempre temos um array válido
       if (Array.isArray(data)) {
@@ -132,22 +121,14 @@ const App = () => {
       } else if (data && Array.isArray(data.slots)) {
         setAvailability(data);
       } else {
-        console.warn('Dados recebidos não estão no formato esperado:', data);
         // Fallback: criar horários padrão do lado do cliente
         setAvailability({ slots: generateDefaultSlots() });
       }
     } catch (error) {
-      console.error('Error loading availability:', error);
-      console.error('Error stack:', error.stack);
-      
       if (error.name === 'AbortError') {
-        showError('Timeout na conexão. Mostrando horários padrão.');
-      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        showError('Erro de conexão com o servidor. Mostrando horários padrão.');
-      } else if (error.name === 'TimeoutError') {
-        showError('Timeout na conexão. Mostrando horários padrão.');
+        showError('Conexão lenta. Mostrando horários padrão.');
       } else {
-        showError(`Erro ao carregar disponibilidade: ${error.message}`);
+        showError('Problema de conexão. Mostrando horários padrão.');
       }
       
       // Em caso de erro, criar horários padrão do lado do cliente
@@ -207,7 +188,7 @@ const App = () => {
     return true;
   };
 
-  // Handle booking form submission
+  // Handle booking form submission (otimizado)
   const handleBookingSubmit = useCallback(async (e) => {
     e.preventDefault();
     
@@ -227,9 +208,9 @@ const App = () => {
         participants: bookingForm.participants.trim() || null
       };
 
-      // Criar controller para timeout manual (compatibilidade com todos navegadores)
+      // Timeout de 12 segundos para agendamento
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos para agendamento
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const response = await fetch(`${API_BASE_URL}/api/appointments`, {
         method: 'POST',
@@ -247,9 +228,9 @@ const App = () => {
         let errorMessage;
         try {
           const parsedError = JSON.parse(errorData);
-          errorMessage = parsedError.error || `HTTP ${response.status}: ${response.statusText}`;
+          errorMessage = parsedError.error || `Erro ${response.status}`;
         } catch {
-          errorMessage = errorData || `HTTP ${response.status}: ${response.statusText}`;
+          errorMessage = errorData || `Erro ${response.status}`;
         }
         throw new Error(errorMessage);
       }
@@ -263,14 +244,15 @@ const App = () => {
         start_time: '',
         end_time: ''
       });
-      loadAvailability();
-    } catch (error) {
-      console.error('Error booking appointment:', error);
       
+      // Recarregar disponibilidade
+      setTimeout(() => loadAvailability(), 500);
+      
+    } catch (error) {
       if (error.name === 'AbortError') {
-        showError('Timeout no agendamento. Tente novamente.');
+        showError('Timeout no agendamento. Verifique sua conexão e tente novamente.');
       } else {
-        showError(`Erro ao agendar: ${error.message}`);
+        showError(error.message || 'Erro ao agendar reunião.');
       }
     } finally {
       setLoading(false);

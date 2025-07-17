@@ -119,34 +119,29 @@ app.get('/api/availability/:date', async (req, res) => {
   console.log('SUPABASE_KEY exists:', !!process.env.SUPABASE_KEY);
   console.log('NODE_ENV:', process.env.NODE_ENV);
   
-  // Definir timeout para a resposta
-  req.setTimeout(40000); // 40 segundos
-  res.setTimeout(40000); // 40 segundos
+  // Timeout mais rápido para melhor experiência
+  req.setTimeout(15000); // 15 segundos
+  res.setTimeout(15000); // 15 segundos
   
   if (!date) {
-    console.log('ERROR: Date parameter missing');
-    return res.status(400).json({ error: 'Parâmetro de data (date) é obrigatório.' });
+    return res.status(400).json({ error: 'Parâmetro de data é obrigatório.' });
   }
   
   try {
-    console.log('Data recebida para availability:', date);
-    
     let appointments = [];
     
-    // Tentar buscar do Supabase com timeout reduzido
+    // Buscar do Supabase com timeout muito reduzido
     if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY && supabase) {
       try {
-        console.log('Tentando conectar ao Supabase...');
-        
-        // Criar promise com timeout personalizado para Supabase
+        // Timeout de apenas 3 segundos para consulta rápida
         const supabasePromise = supabase
           .from('appointments')
-          .select('*')
+          .select('id, name, title, start_time, end_time')
           .eq('date', date)
           .order('start_time', { ascending: true });
           
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Supabase timeout')), 10000); // 10 segundos timeout
+          setTimeout(() => reject(new Error('Timeout')), 3000); // 3 segundos apenas
         });
         
         const { data: supabaseData, error } = await Promise.race([
@@ -155,109 +150,77 @@ app.get('/api/availability/:date', async (req, res) => {
         ]);
           
         if (error) {
-          console.error('SUPABASE ERROR (continuing anyway):', error);
+          console.warn('Supabase error (usando fallback):', error.message);
         } else {
           appointments = supabaseData || [];
-          console.log('Dados do Supabase carregados com sucesso:', appointments.length, 'appointments');
         }
       } catch (supabaseErr) {
-        console.error('SUPABASE CONNECTION ERROR (continuing anyway):', supabaseErr.message);
-      }
-    } else {
-      console.log('Supabase not configured properly, using empty appointments');
-      console.log('Missing:', {
-        url: !process.env.SUPABASE_URL,
-        key: !process.env.SUPABASE_KEY,
-        client: !supabase
-      });
-    }
-    
-    console.log('Agendamentos encontrados:', appointments?.length || 0);
-    
-    // Gerar todos os horários possíveis do dia (exemplo: 08:00 às 18:00, de 30 em 30 min)
-    const startHour = 8;
-    const endHour = 18;
-    const slotDuration = 30; // minutos
-    const slots = [];
-    
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let min = 0; min < 60; min += slotDuration) {
-        const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-        const endMin = min + slotDuration;
-        let endHourSlot = hour;
-        let endMinSlot = endMin;
-        
-        if (endMin >= 60) {
-          endHourSlot++;
-          endMinSlot = endMin - 60;
-        }
-        
-        const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
-        
-        // Verifica se esse slot está ocupado
-        const appointment = (appointments || []).find(appt =>
-          (start >= appt.start_time && start < appt.end_time) ||
-          (end > appt.start_time && end <= appt.end_time) ||
-          (start <= appt.start_time && end >= appt.end_time)
-        );
-        
-        slots.push({
-          start_time: start,
-          end_time: end,
-          available: !appointment,
-          appointment: appointment || null
-        });
+        console.warn('Supabase timeout (usando fallback):', supabaseErr.message);
       }
     }
     
-    console.log(`Slots gerados: ${slots.length} slots para ${date}`);
-    console.log('=== RETURNING RESPONSE ===');
-    console.log('Primeiro slot:', slots[0]);
-    console.log('Último slot:', slots[slots.length - 1]);
+    // Gerar slots de forma mais eficiente
+    const slots = generateTimeSlots(appointments);
     
-    // Garantir headers corretos
+    // Headers para resposta rápida
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'public, max-age=60'); // Cache de 1 minuto
     
-    res.status(200).json(slots);
+    return res.status(200).json(slots);
     
   } catch (err) {
-    console.error('CRITICAL ERROR:', err);
-    console.error('Error stack:', err.stack);
+    console.error('Erro na availability:', err.message);
     
-    // Em caso de erro crítico, retornar horários padrão
-    const defaultSlots = [];
-    const startHour = 8;
-    const endHour = 18;
-    const slotDuration = 30;
-    
-    for (let hour = startHour; hour < endHour; hour++) {
-      for (let min = 0; min < 60; min += slotDuration) {
-        const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
-        const endMin = min + slotDuration;
-        let endHourSlot = hour;
-        let endMinSlot = endMin;
-        
-        if (endMin >= 60) {
-          endHourSlot++;
-          endMinSlot = endMin - 60;
-        }
-        
-        const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
-        
-        defaultSlots.push({
-          start_time: start,
-          end_time: end,
-          available: true,
-          appointment: null
-        });
-      }
-    }
-    
-    console.log('Retornando slots padrão devido a erro:', defaultSlots.length);
-    res.status(200).json(defaultSlots);
+    // Fallback rápido com slots padrão
+    const fallbackSlots = generateTimeSlots([]);
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).json(fallbackSlots);
   }
 });
+
+// Função otimizada para gerar slots
+function generateTimeSlots(appointments = []) {
+  const slots = [];
+  const startHour = 8;
+  const endHour = 18;
+  const slotDuration = 30;
+  
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let min = 0; min < 60; min += slotDuration) {
+      const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+      const endMin = min + slotDuration;
+      let endHourSlot = hour;
+      let endMinSlot = endMin;
+      
+      if (endMin >= 60) {
+        endHourSlot++;
+        endMinSlot = endMin - 60;
+      }
+      
+      const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
+      
+      // Verificação mais rápida de conflitos
+      const appointment = appointments.find(appt =>
+        (start >= appt.start_time && start < appt.end_time) ||
+        (end > appt.start_time && end <= appt.end_time) ||
+        (start <= appt.start_time && end >= appt.end_time)
+      );
+      
+      slots.push({
+        start_time: start,
+        end_time: end,
+        available: !appointment,
+        appointment: appointment ? {
+          id: appointment.id,
+          name: appointment.name,
+          title: appointment.title
+        } : null
+      });
+    }
+  }
+  
+  return slots;
+}
 
 // Rota de fallback para debugging
 app.get('/api/availability', (req, res) => {
@@ -287,37 +250,34 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Criar agendamento
+// Criar agendamento (otimizado)
 app.post('/api/appointments', async (req, res) => {
   const { title, description, name, date, start_time, end_time } = req.body;
 
   if (!title || !name || !date || !start_time || !end_time) {
-    return res.status(400).json({ error: 'Campos obrigatórios faltando: title, name, date, start_time, end_time.' });
+    return res.status(400).json({ error: 'Campos obrigatórios: title, name, date, start_time, end_time.' });
   }
 
-  console.log(`Verificando conflitos para data: ${date}, início: ${start_time}, fim: ${end_time}`);
-  
-  // Definir timeout para a resposta
-  req.setTimeout(50000); // 50 segundos
-  res.setTimeout(50000); // 50 segundos
+  // Timeout mais rápido
+  req.setTimeout(20000); // 20 segundos
+  res.setTimeout(20000); // 20 segundos
   
   // Verificar se o Supabase está disponível
   if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
-    console.error('Supabase não está configurado. Não é possível criar agendamentos.');
     return res.status(503).json({ 
-      error: 'Serviço de banco de dados não está disponível. Entre em contato com o administrador.' 
+      error: 'Serviço temporariamente indisponível. Tente novamente.' 
     });
   }
   
   try {
-    // Verificar conflito com timeout personalizado
+    // Verificar conflito com timeout de 5 segundos
     const checkConflictPromise = supabase
       .from('appointments')
-      .select('*')
+      .select('id, start_time, end_time')
       .eq('date', date);
 
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout ao verificar conflitos')), 15000); // 15 segundos timeout
+      setTimeout(() => reject(new Error('Timeout')), 5000); // 5 segundos
     });
 
     const { data: conflitos, error: errorCheck } = await Promise.race([
@@ -326,8 +286,8 @@ app.post('/api/appointments', async (req, res) => {
     ]);
 
     if (errorCheck) {
-      console.error('Erro ao verificar conflitos de agendamento:', errorCheck.message);
-      return res.status(500).json({ error: errorCheck.message });
+      console.error('Erro ao verificar conflitos:', errorCheck.message);
+      return res.status(500).json({ error: 'Erro ao verificar disponibilidade.' });
     }
 
     const conflitou = conflitos?.some(appt => {
@@ -339,20 +299,17 @@ app.post('/api/appointments', async (req, res) => {
     });
 
     if (conflitou) {
-      console.log('Conflito de agendamento detectado.');
-      return res.status(409).json({ error: 'Já existe um agendamento neste horário.' });
+      return res.status(409).json({ error: 'Horário já ocupado.' });
     }
-
-    console.log('Tentando criar novo agendamento:', { title, description, name, date, start_time, end_time });
     
-    // Criar agendamento com timeout personalizado
+    // Criar agendamento com timeout de 10 segundos
     const createAppointmentPromise = supabase
       .from('appointments')
       .insert([{ title, description, name, date, start_time, end_time }])
       .select();
 
     const createTimeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Timeout ao criar agendamento')), 20000); // 20 segundos timeout
+      setTimeout(() => reject(new Error('Timeout')), 10000); // 10 segundos
     });
 
     const { data: created, error } = await Promise.race([
@@ -362,16 +319,15 @@ app.post('/api/appointments', async (req, res) => {
 
     if (error) {
       console.error('Erro ao criar agendamento:', error.message);
-      return res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: 'Erro ao salvar agendamento.' });
     }
 
-    console.log('Agendamento criado com sucesso:', created[0]);
     res.status(201).json(created[0]);
     
   } catch (err) {
-    console.error('Erro interno ao criar agendamento:', err);
+    console.error('Erro interno:', err.message);
     if (err.message.includes('Timeout')) {
-      res.status(504).json({ error: 'Timeout ao processar agendamento. Tente novamente.' });
+      res.status(504).json({ error: 'Timeout. Tente novamente em alguns segundos.' });
     } else {
       res.status(500).json({ error: 'Erro interno do servidor.' });
     }
