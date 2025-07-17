@@ -380,12 +380,6 @@ app.delete('/api/appointments/:id', async (req, res) => {
   }
 });
 
-// Define a porta em que o servidor irá escutar
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`Acesse: http://localhost:${PORT}`);
-});
-
-// Exporta o app para que possa ser importado em outros arquivos (se necessário)
-module.exports = app;
+// Adaptação para Vercel Serverless Function
+const serverless = require('serverless-http');
+module.exports = serverless(app);
