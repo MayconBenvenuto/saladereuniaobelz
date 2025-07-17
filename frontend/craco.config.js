@@ -2,10 +2,21 @@ module.exports = {
   devServer: {
     proxy: {
       '/api': {
-        target: 'http://localhost:3001', // Corrigido para a porta correta do backend
+        target: process.env.REACT_APP_API_URL || 'http://localhost:3001',
         changeOrigin: true,
         pathRewrite: { '^/api': '' },
       },
+    },
+  },
+  webpack: {
+    configure: (webpackConfig, { env, paths }) => {
+      if (env === 'production') {
+        // Configurações específicas para produção
+        webpackConfig.optimization.splitChunks = {
+          chunks: 'all',
+        };
+      }
+      return webpackConfig;
     },
   },
 };

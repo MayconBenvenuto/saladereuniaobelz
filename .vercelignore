@@ -1,6 +1,14 @@
-# Arquivos desnecessários para o deploy
+# Node modules
 node_modules
+frontend/node_modules
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
 .env.local
 .env.development.local
 .env.test.local
@@ -18,7 +26,18 @@ DEPLOY.md
 FIX-404-FINAL.md
 SETUP-DATABASE-GUIDE.md
 SUMMARY.md
+README.md
+test_result.md
 
 # Arquivos temporários
 .DS_Store
 Thumbs.db
+
+# Database files (local only)
+api/meeting_room.db
+frontend/data/
+
+# Build scripts e configurações desnecessárias
+build.sh
+start-all.ps1
+pre-deploy-check.sh
