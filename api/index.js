@@ -10,20 +10,20 @@ console.log('Iniciando backend...');
 // Inicializa o aplicativo Express
 const app = express();
 
-// Configuração CORS simples mas com headers específicos
+// Configuração CORS otimizada
 app.use(cors({
   origin: true,
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
-// Middleware para adicionar headers CORS manualmente se necessário
+// Headers CORS otimizados (removendo duplicação)
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    res.sendStatus(204);
   } else {
     next();
   }
@@ -106,22 +106,16 @@ app.get('/api/appointments', async (req, res) => {
   }
 });
 
-// Rota de disponibilidade para compatibilidade com o frontend (path parameter)
+// Rota de disponibilidade otimizada - retorna apenas agendamentos ocupados
 app.get('/api/availability/:date', async (req, res) => {
   const { date } = req.params;
   
-  console.log('=== AVAILABILITY ROUTE CALLED ===');
-  console.log('Date param:', date);
-  console.log('Full URL:', req.url);
-  console.log('Method:', req.method);
-  console.log('Environment Variables Check:');
-  console.log('SUPABASE_URL exists:', !!process.env.SUPABASE_URL);
-  console.log('SUPABASE_KEY exists:', !!process.env.SUPABASE_KEY);
-  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('=== OPTIMIZED AVAILABILITY ROUTE ===');
+  console.log('Date:', date);
   
-  // Timeout mais rápido para melhor experiência
-  req.setTimeout(15000); // 15 segundos
-  res.setTimeout(15000); // 15 segundos
+  // Timeout aumentado para conexões móveis
+  req.setTimeout(30000); // 30 segundos
+  res.setTimeout(30000); // 30 segundos
   
   if (!date) {
     return res.status(400).json({ error: 'Parâmetro de data é obrigatório.' });
@@ -130,10 +124,10 @@ app.get('/api/availability/:date', async (req, res) => {
   try {
     let appointments = [];
     
-    // Buscar do Supabase com timeout ajustado
+    // Buscar apenas agendamentos ocupados (payload menor)
     if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY && supabase) {
       try {
-        // Timeout aumentado para 7 segundos
+        // Timeout aumentado para 15 segundos
         const supabasePromise = supabase
           .from('appointments')
           .select('id, name, title, start_time, end_time')
@@ -141,7 +135,7 @@ app.get('/api/availability/:date', async (req, res) => {
           .order('start_time', { ascending: true });
 
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout na consulta Supabase')), 7000); // 7 segundos
+          setTimeout(() => reject(new Error('Timeout na consulta Supabase')), 15000); // 15 segundos
         });
 
         const result = await Promise.race([
@@ -150,37 +144,45 @@ app.get('/api/availability/:date', async (req, res) => {
         ]);
 
         if (result && result.error) {
-          console.warn('Supabase error (usando fallback):', result.error.message);
+          console.warn('Supabase error:', result.error.message);
         } else if (result && result.data) {
           appointments = result.data || [];
-        } else {
-          console.warn('Resposta inesperada do Supabase:', result);
         }
       } catch (supabaseErr) {
-        if (supabaseErr.message && supabaseErr.message.includes('Timeout')) {
-          console.warn('Timeout ao consultar Supabase (usando fallback):', supabaseErr.message);
-        } else {
-          console.warn('Erro ao consultar Supabase (usando fallback):', supabaseErr.message);
-        }
+        console.warn('Erro ao consultar Supabase:', supabaseErr.message);
       }
     }
     
-    // Gerar slots de forma mais eficiente
-    const slots = generateTimeSlots(appointments);
-    
-    // Headers para resposta rápida
+    // Headers otimizados para mobile
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=60'); // Cache de 1 minuto
+    res.setHeader('Cache-Control', 'public, max-age=300'); // Cache de 5 minutos
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     
-    return res.status(200).json(slots);
+    // Retorna apenas os agendamentos ocupados (frontend gera os slots)
+    return res.status(200).json({
+      date: date,
+      occupied: appointments,
+      slots_config: {
+        start_hour: 8,
+        end_hour: 18,
+        slot_duration: 30
+      }
+    });
     
   } catch (err) {
     console.error('Erro na availability:', err.message);
     
-    // Fallback rápido com slots padrão
-    const fallbackSlots = generateTimeSlots([]);
+    // Fallback com resposta mínima
     res.setHeader('Content-Type', 'application/json');
-    return res.status(200).json(fallbackSlots);
+    return res.status(200).json({
+      date: date,
+      occupied: [],
+      slots_config: {
+        start_hour: 8,
+        end_hour: 18,
+        slot_duration: 30
+      }
+    });
   }
 });
 
@@ -256,7 +258,7 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Criar agendamento (otimizado)
+// Criar agendamento otimizado com transação única
 app.post('/api/appointments', async (req, res) => {
   const { title, description, name, date, start_time, end_time } = req.body;
 
@@ -264,9 +266,9 @@ app.post('/api/appointments', async (req, res) => {
     return res.status(400).json({ error: 'Campos obrigatórios: title, name, date, start_time, end_time.' });
   }
 
-  // Timeout ajustado
-  req.setTimeout(25000); // 25 segundos
-  res.setTimeout(25000); // 25 segundos
+  // Timeout aumentado para conexões móveis
+  req.setTimeout(45000); // 45 segundos
+  res.setTimeout(45000); // 45 segundos
 
   // Verificar se o Supabase está disponível
   if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
@@ -276,85 +278,123 @@ app.post('/api/appointments', async (req, res) => {
   }
 
   try {
-    // Verificar conflito com timeout de 6 segundos
-    let conflitos = null;
-    let errorCheck = null;
+    console.log('=== CRIANDO AGENDAMENTO ===');
+    console.log('Dados:', { title, name, date, start_time, end_time });
+
+    // Transação única: verifica conflito E cria agendamento em uma operação
+    const { data: created, error } = await supabase.rpc('create_appointment_safe', {
+      p_title: title,
+      p_description: description || null,
+      p_name: name,
+      p_date: date,
+      p_start_time: start_time,
+      p_end_time: end_time
+    });
+
+    if (error) {
+      console.error('Erro na função RPC:', error.message);
+      
+      // Se a função RPC não existir, usar método tradicional com retry
+      if (error.message.includes('function') || error.message.includes('does not exist')) {
+        return await createAppointmentTraditional(req, res, { title, description, name, date, start_time, end_time });
+      }
+      
+      if (error.message.includes('conflict') || error.message.includes('ocupado')) {
+        return res.status(409).json({ error: 'Horário já ocupado por outro agendamento.' });
+      }
+      
+      return res.status(500).json({ error: 'Erro ao salvar agendamento. Tente novamente.' });
+    }
+
+    console.log('Agendamento criado com sucesso:', created);
+    res.status(201).json(created);
+
+  } catch (err) {
+    console.error('Erro interno:', err.message);
+    
+    // Fallback para método tradicional em caso de erro
+    return await createAppointmentTraditional(req, res, { title, description, name, date, start_time, end_time });
+  }
+});
+
+// Função helper para criar agendamento tradicional com retry
+async function createAppointmentTraditional(req, res, { title, description, name, date, start_time, end_time }) {
+  const maxRetries = 3;
+  let attempt = 0;
+  
+  while (attempt < maxRetries) {
+    attempt++;
+    console.log(`Tentativa ${attempt}/${maxRetries} - método tradicional`);
+    
     try {
+      // Verificar conflito com timeout de 10 segundos
       const checkConflictPromise = supabase
         .from('appointments')
         .select('id, start_time, end_time')
         .eq('date', date);
+      
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout ao checar conflitos')), 6000); // 6 segundos
+        setTimeout(() => reject(new Error('Timeout ao checar conflitos')), 10000);
       });
-      ({ data: conflitos, error: errorCheck } = await Promise.race([
+      
+      const { data: conflitos, error: errorCheck } = await Promise.race([
         checkConflictPromise,
         timeoutPromise
-      ]));
-    } catch (err) {
-      if (err.message.includes('Timeout')) {
-        console.warn('Timeout ao checar conflitos. Retornando erro rápido.');
-        return res.status(504).json({ error: 'Timeout ao checar disponibilidade. Tente novamente.' });
-      } else {
-        console.error('Erro inesperado ao checar conflitos:', err.message);
-        return res.status(500).json({ error: 'Erro ao verificar disponibilidade.' });
+      ]);
+
+      if (errorCheck) {
+        throw new Error(`Erro ao verificar conflitos: ${errorCheck.message}`);
       }
-    }
 
-    if (errorCheck) {
-      console.error('Erro ao verificar conflitos:', errorCheck.message);
-      return res.status(500).json({ error: 'Erro ao verificar disponibilidade.' });
-    }
+      const conflitou = conflitos?.some(appt => {
+        return (
+          (start_time >= appt.start_time && start_time < appt.end_time) ||
+          (end_time > appt.start_time && end_time <= appt.end_time) ||
+          (start_time <= appt.start_time && end_time >= appt.end_time)
+        );
+      });
 
-    const conflitou = conflitos?.some(appt => {
-      return (
-        (start_time >= appt.start_time && start_time < appt.end_time) ||
-        (end_time > appt.start_time && end_time <= appt.end_time) ||
-        (start_time <= appt.start_time && end_time >= appt.end_time)
-      );
-    });
+      if (conflitou) {
+        return res.status(409).json({ error: 'Horário já ocupado por outro agendamento.' });
+      }
 
-    if (conflitou) {
-      return res.status(409).json({ error: 'Horário já ocupado.' });
-    }
-
-    // Criar agendamento com timeout de 8 segundos
-    let created = null;
-    let error = null;
-    try {
-      const createAppointmentPromise = supabase
+      // Criar agendamento com timeout de 15 segundos
+      const createPromise = supabase
         .from('appointments')
         .insert([{ title, description, name, date, start_time, end_time }])
         .select();
+      
       const createTimeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout ao salvar agendamento')), 8000); // 8 segundos
+        setTimeout(() => reject(new Error('Timeout ao salvar agendamento')), 15000);
       });
-      ({ data: created, error } = await Promise.race([
-        createAppointmentPromise,
+      
+      const { data: created, error } = await Promise.race([
+        createPromise,
         createTimeoutPromise
-      ]));
-    } catch (err) {
-      if (err.message.includes('Timeout')) {
-        console.warn('Timeout ao salvar agendamento. Retornando erro rápido.');
-        return res.status(504).json({ error: 'Timeout ao salvar agendamento. Tente novamente.' });
-      } else {
-        console.error('Erro inesperado ao salvar agendamento:', err.message);
-        return res.status(500).json({ error: 'Erro ao salvar agendamento.' });
+      ]);
+
+      if (error) {
+        throw new Error(`Erro ao salvar: ${error.message}`);
       }
+
+      console.log(`Agendamento criado na tentativa ${attempt}:`, created[0]);
+      return res.status(201).json(created[0]);
+
+    } catch (err) {
+      console.warn(`Tentativa ${attempt} falhou:`, err.message);
+      
+      if (attempt === maxRetries) {
+        console.error('Todas as tentativas falharam');
+        return res.status(500).json({ 
+          error: 'Erro ao salvar agendamento após múltiplas tentativas. Verifique sua conexão e tente novamente.' 
+        });
+      }
+      
+      // Aguardar antes da próxima tentativa (backoff exponencial)
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
     }
-
-    if (error) {
-      console.error('Erro ao criar agendamento:', error.message);
-      return res.status(500).json({ error: 'Erro ao salvar agendamento.' });
-    }
-
-    res.status(201).json(created[0]);
-
-  } catch (err) {
-    console.error('Erro interno:', err.message);
-    res.status(500).json({ error: 'Erro interno do servidor.' });
   }
-});
+}
 
 // Deletar agendamento
 app.delete('/api/appointments/:id', async (req, res) => {
@@ -383,6 +423,94 @@ app.delete('/api/appointments/:id', async (req, res) => {
   } catch (err) {
     console.error('Erro interno ao deletar agendamento:', err);
     res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+});
+
+// Novo endpoint otimizado: apenas slots ocupados (muito mais rápido)
+app.get('/api/occupied-slots/:date', async (req, res) => {
+  const { date } = req.params;
+  
+  console.log('=== OCCUPIED SLOTS ROUTE ===');
+  console.log('Date:', date);
+  
+  // Headers de performance
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'public, max-age=30'); // Cache de 30 segundos
+  res.setHeader('X-Response-Time', Date.now());
+  
+  if (!date) {
+    return res.status(400).json({ error: 'Data é obrigatória.' });
+  }
+  
+  try {
+    let appointments = [];
+    
+    if (supabase) {
+      // Timeout mais generoso para conexão inicial
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Database timeout')), 20000); // 20 segundos
+      });
+      
+      const queryPromise = supabase
+        .from('appointments')
+        .select('id, name, title, start_time, end_time')
+        .eq('date', date)
+        .order('start_time', { ascending: true });
+      
+      try {
+        const result = await Promise.race([queryPromise, timeoutPromise]);
+        
+        if (result && !result.error && result.data) {
+          appointments = result.data;
+        } else if (result && result.error) {
+          console.warn('Supabase query error:', result.error.message);
+        }
+      } catch (dbError) {
+        console.warn('Database error (returning empty):', dbError.message);
+      }
+    }
+    
+    // Retornar apenas os agendamentos (muito menor payload)
+    return res.status(200).json(appointments);
+    
+  } catch (err) {
+    console.error('Error in occupied-slots:', err.message);
+    // Em caso de erro, retornar array vazio (não falhar)
+    return res.status(200).json([]);
+  }
+});
+
+// Endpoint otimizado para verificação rápida de disponibilidade
+app.get('/api/check-availability/:date/:start_time/:end_time', async (req, res) => {
+  const { date, start_time, end_time } = req.params;
+  
+  console.log('=== CHECK AVAILABILITY ===');
+  console.log('Params:', { date, start_time, end_time });
+  
+  if (!date || !start_time || !end_time) {
+    return res.status(400).json({ error: 'Todos os parâmetros são obrigatórios.' });
+  }
+  
+  try {
+    let available = true;
+    
+    if (supabase) {
+      const { data: conflicts } = await supabase
+        .from('appointments')
+        .select('id')
+        .eq('date', date)
+        .or(`and(start_time.lte.${start_time},end_time.gt.${start_time}),and(start_time.lt.${end_time},end_time.gte.${end_time}),and(start_time.gte.${start_time},end_time.lte.${end_time})`)
+        .limit(1);
+      
+      available = !conflicts || conflicts.length === 0;
+    }
+    
+    res.json({ available, checked_at: new Date().toISOString() });
+    
+  } catch (err) {
+    console.error('Error checking availability:', err.message);
+    // Em caso de erro, assumir disponível (melhor UX)
+    res.json({ available: true, error: 'Could not verify, assuming available' });
   }
 });
 

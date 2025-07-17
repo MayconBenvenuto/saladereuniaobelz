@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import './App-mobile.css';
+import './App.css';
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' ? '' : '';
 
@@ -55,41 +55,41 @@ const App = () => {
   });
 
   // Format date for API calls
-  const formatDateForAPI = (date) => {
+  const formatDateForAPI = useCallback((date) => {
     return date.toISOString().split('T')[0];
-  };
+  }, []);
 
   // Format date for display
-  const formatDateForDisplay = (date) => {
+  const formatDateForDisplay = useCallback((date) => {
     return date.toLocaleDateString('pt-BR', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
-  };
+  }, []);
 
   // Format time for display
-  const formatTimeForDisplay = (timeString) => {
+  const formatTimeForDisplay = useCallback((timeString) => {
     return timeString.slice(0, 5);
-  };
+  }, []);
 
   // Show error message
-  const showError = (message) => {
+  const showError = useCallback((message) => {
     setError(message);
     setTimeout(() => setError(null), 5000);
-  };
+  }, []);
 
   // Show success message
-  const showSuccess = (message) => {
+  const showSuccess = useCallback((message) => {
     setSuccess(message);
     setTimeout(() => setSuccess(null), 3000);
-  };
+  }, []);
 
-  // Gerar slots otimizado usando useMemo para cache
-  const generateSlots = useMemo(() => {
+  // Generate time slots from occupied appointments (frontend-only generation)
+  const generateTimeSlots = useCallback((occupiedAppointments, config) => {
     const slots = [];
-    const { start_hour, end_hour, slot_duration } = slotsConfig;
+    const { start_hour, end_hour, slot_duration } = config;
 
     for (let hour = start_hour; hour < end_hour; hour++) {
       for (let min = 0; min < 60; min += slot_duration) {
@@ -105,14 +105,8 @@ const App = () => {
 
         const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
 
-        // Verificar se há conflito com agendamentos
-        const isOccupied = occupiedSlots.some(appointment =>
-          (start >= appointment.start_time && start < appointment.end_time) ||
-          (end > appointment.start_time && end <= appointment.end_time) ||
-          (start <= appointment.start_time && end >= appointment.end_time)
-        );
-
-        const appointment = occupiedSlots.find(appt =>
+        // Check if this slot conflicts with any occupied appointment
+        const appointment = occupiedAppointments.find(appt =>
           (start >= appt.start_time && start < appt.end_time) ||
           (end > appt.start_time && end <= appt.end_time) ||
           (start <= appt.start_time && end >= appt.end_time)
@@ -121,157 +115,127 @@ const App = () => {
         slots.push({
           start_time: start,
           end_time: end,
-          available: !isOccupied,
-          appointment: appointment || null
+          available: !appointment,
+          appointment: appointment ? {
+            id: appointment.id,
+            name: appointment.name,
+            title: appointment.title
+          } : null
         });
       }
     }
 
     return slots;
-  }, [occupiedSlots, slotsConfig]);
+  }, []);
 
-  // Função para fazer retry automático
-  const fetchWithRetry = async (url, options, maxRetries = 3) => {
-    let lastError;
-    
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        // Timeout progressivo: 15s, 20s, 30s
-        const timeout = 15000 + (i * 5000);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
-        
-        const response = await fetch(url, {
-          ...options,
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.ok) {
-          return response;
-        }
-        
-        // Se for erro 4xx, não retry
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(`Erro ${response.status}: ${response.statusText}`);
-        }
-        
-        // Para 5xx, continua tentando
-        lastError = new Error(`Erro ${response.status}: ${response.statusText}`);
-        
-      } catch (error) {
-        lastError = error;
-        
-        if (error.name === 'AbortError') {
-          console.warn(`Tentativa ${i + 1}/${maxRetries} - Timeout`);
-        } else {
-          console.warn(`Tentativa ${i + 1}/${maxRetries} - ${error.message}`);
-        }
-        
-        // Se não for a última tentativa, aguarda antes de tentar novamente
-        if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        }
-      }
-    }
-    
-    throw lastError;
-  };
+  // Memoized time slots
+  const timeSlots = useMemo(() => {
+    return generateTimeSlots(occupiedSlots, slotsConfig);
+  }, [occupiedSlots, slotsConfig, generateTimeSlots]);
 
-  // Load availability otimizado com cache e retry
-  const loadAvailability = useCallback(async () => {
+  // Load availability with retry and cache
+  const loadAvailability = useCallback(async (retryCount = 0) => {
     const dateStr = formatDateForAPI(selectedDate);
     
-    // Verificar cache primeiro
+    // Try cache first
     const cached = getFromCache(dateStr);
-    if (cached) {
-      setOccupiedSlots(cached);
+    if (cached && retryCount === 0) {
+      setOccupiedSlots(cached.occupied || []);
+      if (cached.slots_config) {
+        setSlotsConfig(cached.slots_config);
+      }
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     
     try {
-      const response = await fetchWithRetry(`${API_BASE_URL}/api/occupied-slots/${dateStr}`, {
+      const apiUrl = `${API_BASE_URL}/api/availability/${dateStr}`;
+      
+      // Timeout aumentado para mobile
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 segundos
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Erro ${response.status}`);
+      }
       
       const data = await response.json();
       
-      // Processar apenas agendamentos ocupados
-      const occupied = Array.isArray(data) ? data : [];
-      setOccupiedSlots(occupied);
+      // Update state with optimized data
+      setOccupiedSlots(data.occupied || []);
+      if (data.slots_config) {
+        setSlotsConfig(data.slots_config);
+      }
       
-      // Salvar no cache
-      setToCache(dateStr, occupied);
+      // Cache the result
+      setToCache(dateStr, data);
       
     } catch (error) {
-      console.error('Erro ao carregar disponibilidade:', error);
-      
       if (error.name === 'AbortError') {
-        showError('Conexão lenta. Usando dados em cache.');
-      } else {
-        showError('Problema de conexão. Dados podem estar desatualizados.');
-      }
-      
-      // Em caso de erro, usar cache expirado se disponível ou array vazio
-      const expiredCache = localStorage.getItem(`${CACHE_KEY}_${dateStr}`);
-      if (expiredCache) {
-        try {
-          const { data } = JSON.parse(expiredCache);
-          setOccupiedSlots(data || []);
-        } catch {
-          setOccupiedSlots([]);
+        if (retryCount < 2) {
+          console.log(`Timeout, tentando novamente... (${retryCount + 1}/3)`);
+          setTimeout(() => loadAvailability(retryCount + 1), 2000);
+          return;
         }
+        showError('Conexão lenta. Mostrando dados padrão.');
       } else {
-        setOccupiedSlots([]);
+        if (retryCount < 2) {
+          console.log(`Erro de conexão, tentando novamente... (${retryCount + 1}/3)`);
+          setTimeout(() => loadAvailability(retryCount + 1), 2000);
+          return;
+        }
+        showError('Problema de conexão. Mostrando dados padrão.');
       }
       
+      // Fallback: use empty occupied slots
+      setOccupiedSlots([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedDate]);
+  }, [selectedDate, formatDateForAPI, showError]);
+
+  // Pre-fetch adjacent dates for faster navigation
+  const prefetchAdjacentDates = useCallback(async () => {
+    const tomorrow = new Date(selectedDate);
+    tomorrow.setDate(selectedDate.getDate() + 1);
+    
+    const yesterday = new Date(selectedDate);
+    yesterday.setDate(selectedDate.getDate() - 1);
+    
+    [tomorrow, yesterday].forEach(async (date) => {
+      const dateStr = formatDateForAPI(date);
+      if (!getFromCache(dateStr)) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/availability/${dateStr}`);
+          if (response.ok) {
+            const data = await response.json();
+            setToCache(dateStr, data);
+          }
+        } catch (e) {
+          // Silent fail for prefetch
+        }
+      }
+    });
+  }, [selectedDate, formatDateForAPI]);
 
   // Load availability when date changes
   useEffect(() => {
     loadAvailability();
-  }, [loadAvailability]);
-
-  // Pre-fetch próximos dias para navegação rápida
-  useEffect(() => {
-    const prefetchDays = async () => {
-      const today = new Date(selectedDate);
-      const promises = [];
-      
-      // Prefetch próximos 3 dias
-      for (let i = 1; i <= 3; i++) {
-        const nextDay = new Date(today);
-        nextDay.setDate(today.getDate() + i);
-        const dateStr = formatDateForAPI(nextDay);
-        
-        // Só prefetch se não estiver em cache
-        if (!getFromCache(dateStr)) {
-          promises.push(
-            fetch(`${API_BASE_URL}/api/occupied-slots/${dateStr}`)
-              .then(res => res.json())
-              .then(data => setToCache(dateStr, data))
-              .catch(() => {}) // Ignorar erros de prefetch
-          );
-        }
-      }
-      
-      await Promise.all(promises);
-    };
-    
-    // Prefetch após 2 segundos para não atrapalhar carregamento inicial
-    const timeoutId = setTimeout(prefetchDays, 2000);
-    return () => clearTimeout(timeoutId);
-  }, [selectedDate]);
+    // Prefetch adjacent dates after a short delay
+    setTimeout(prefetchAdjacentDates, 1000);
+  }, [loadAvailability, prefetchAdjacentDates]);
 
   // Handle date navigation
   const navigateDate = useCallback((direction) => {
@@ -294,7 +258,7 @@ const App = () => {
   }, [bookingForm]);
 
   // Validate booking form
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     if (!bookingForm.name.trim()) {
       showError('Nome é obrigatório');
       return false;
@@ -316,10 +280,10 @@ const App = () => {
       return false;
     }
     return true;
-  };
+  }, [bookingForm, showError]);
 
-  // Handle booking form submission com retry otimizado
-  const handleBookingSubmit = useCallback(async (e) => {
+  // Handle booking form submission with retry
+  const handleBookingSubmit = useCallback(async (e, retryCount = 0) => {
     e.preventDefault();
     
     if (!validateForm()) return;
@@ -338,15 +302,32 @@ const App = () => {
         participants: bookingForm.participants.trim() || null
       };
 
-      const response = await fetchWithRetry(`${API_BASE_URL}/api/appointments`, {
+      // Timeout aumentado para agendamento
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos
+
+      const response = await fetch(`${API_BASE_URL}/api/appointments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(bookingData)
-      }, 2); // Só 2 tentativas para agendamento
+        body: JSON.stringify(bookingData),
+        signal: controller.signal
+      });
 
-      const result = await response.json();
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        let errorMessage;
+        try {
+          const parsedError = JSON.parse(errorData);
+          errorMessage = parsedError.error || `Erro ${response.status}`;
+        } catch {
+          errorMessage = errorData || `Erro ${response.status}`;
+        }
+        throw new Error(errorMessage);
+      }
 
       showSuccess('Agendamento realizado com sucesso!');
       setShowBookingModal(false);
@@ -358,25 +339,33 @@ const App = () => {
         end_time: ''
       });
       
-      // Invalidar cache e recarregar
+      // Clear cache and reload
       const dateStr = formatDateForAPI(selectedDate);
       localStorage.removeItem(`${CACHE_KEY}_${dateStr}`);
       setTimeout(() => loadAvailability(), 500);
       
     } catch (error) {
       if (error.name === 'AbortError') {
+        if (retryCount < 2) {
+          showSuccess('Tentando novamente...');
+          setTimeout(() => handleBookingSubmit(e, retryCount + 1), 3000);
+          return;
+        }
         showError('Timeout no agendamento. Verifique sua conexão e tente novamente.');
-      } else if (error.message.includes('409') || error.message.includes('ocupado')) {
-        showError('Horário já foi ocupado por outro usuário. Escolha outro horário.');
       } else {
-        showError(error.message || 'Erro ao agendar reunião. Tente novamente.');
+        if (retryCount < 2 && !error.message.includes('ocupado')) {
+          showSuccess('Tentando novamente...');
+          setTimeout(() => handleBookingSubmit(e, retryCount + 1), 3000);
+          return;
+        }
+        showError(error.message || 'Erro ao agendar reunião.');
       }
     } finally {
       setLoading(false);
     }
-  }, [bookingForm, selectedDate, loadAvailability, fetchWithRetry]);
+  }, [bookingForm, selectedDate, formatDateForAPI, validateForm, showError, showSuccess, loadAvailability]);
 
-  // Render time slot otimizado com React.memo
+  // Render time slot (memoized component would be better, but keeping simple)
   const renderTimeSlot = useCallback((slot, index) => {
     const isAvailable = slot.available;
     const slotClass = isAvailable ? 'time-slot available' : 'time-slot occupied';
@@ -386,12 +375,12 @@ const App = () => {
         key={`${slot.start_time}-${slot.end_time}`}
         className={slotClass}
         onClick={() => handleSlotClick(slot)}
-        title={!isAvailable ? `${slot.appointment?.title} - ${slot.appointment?.name}` : 'Clique para agendar'}
+        title={!isAvailable ? `${slot.appointment.title} - ${slot.appointment.name}` : 'Clique para agendar'}
       >
         <div className="time-range">
           {formatTimeForDisplay(slot.start_time)} - {formatTimeForDisplay(slot.end_time)}
         </div>
-        {!isAvailable && slot.appointment && (
+        {!isAvailable && (
           <div className="appointment-info">
             <div className="appointment-title">{slot.appointment.title}</div>
             <div className="appointment-name">{slot.appointment.name}</div>
@@ -399,7 +388,7 @@ const App = () => {
         )}
       </div>
     );
-  }, [handleSlotClick]);
+  }, [handleSlotClick, formatTimeForDisplay]);
 
   return (
     <div className="app">
@@ -426,14 +415,16 @@ const App = () => {
               src="logo-belz.png"
               alt="Belz Corretora de Seguros"
               className="logo"
+              loading="lazy"
             />
             <h1>Belz Corretora de Seguros</h1>
           </div>
           <div className="room-image-container">
             <img 
-              src="https://images.unsplash.com/photo-1517502884422-41eaead166d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxjb25mZXJlbmNlJTIwcm9vbXxlbnwwfHx8fDE3NTI1MTU3NjZ8MA&ixlib=rb-4.1.0&q=85"
+              src="https://images.unsplash.com/photo-1517502884422-41eaead166d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxjb25mZXJlbmNlJTIwcm9vbXxlbnwwfHx8fDE3NTI1MTU3NjZ8MA&ixlib=rb-4.1.0&q=85&w=400"
               alt="Sala de Reunião"
               className="room-image"
+              loading="lazy"
             />
             <div className="room-overlay">
               <h2>Sala de Reunião</h2>
@@ -451,6 +442,7 @@ const App = () => {
             className="nav-button"
             onClick={() => navigateDate(-1)}
             disabled={loading}
+            aria-label="Dia anterior"
           >
             ←
           </button>
@@ -459,6 +451,7 @@ const App = () => {
             className="nav-button"
             onClick={() => navigateDate(1)}
             disabled={loading}
+            aria-label="Próximo dia"
           >
             →
           </button>
@@ -471,9 +464,16 @@ const App = () => {
               <div className="spinner"></div>
               Carregando...
             </div>
-          ) : (
+          ) : timeSlots.length > 0 ? (
             <div className="time-slots">
-              {generateSlots.map((slot, index) => renderTimeSlot(slot, index))}
+              {timeSlots.map((slot, index) => renderTimeSlot(slot, index))}
+            </div>
+          ) : (
+            <div className="no-data">
+              <p>Nenhum horário disponível para este dia</p>
+              <button onClick={() => loadAvailability()} className="retry-button">
+                Tentar novamente
+              </button>
             </div>
           )}
         </div>
@@ -484,6 +484,7 @@ const App = () => {
             className="floating-action-button"
             onClick={() => setShowBookingModal(true)}
             disabled={loading}
+            aria-label="Agendar nova reunião"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/>
@@ -497,7 +498,7 @@ const App = () => {
 
       {/* Booking modal */}
       {showBookingModal && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setShowBookingModal(false)}>
           <div className="modal-content">
             <div className="modal-header">
               <h3>Agendar Reunião</h3>
@@ -505,27 +506,31 @@ const App = () => {
                 className="close-button"
                 onClick={() => setShowBookingModal(false)}
                 disabled={loading}
+                aria-label="Fechar modal"
               >
                 ×
               </button>
             </div>
             <form onSubmit={handleBookingSubmit} className="booking-form">
               <div className="form-group">
-                <label>Nome e Sobrenome *</label>
+                <label htmlFor="name">Nome e Sobrenome *</label>
                 <input
+                  id="name"
                   type="text"
                   value={bookingForm.name}
                   onChange={(e) => setBookingForm({...bookingForm, name: e.target.value})}
                   placeholder="Digite seu nome completo"
                   required
                   disabled={loading}
+                  autoComplete="name"
                 />
               </div>
               
               <div className="form-row">
                 <div className="form-group">
-                  <label>Data</label>
+                  <label htmlFor="date">Data</label>
                   <input
+                    id="date"
                     type="date"
                     value={formatDateForAPI(selectedDate)}
                     onChange={(e) => {
@@ -538,8 +543,9 @@ const App = () => {
               
               <div className="form-row">
                 <div className="form-group">
-                  <label>Horário de Início *</label>
+                  <label htmlFor="start_time">Horário de Início *</label>
                   <input
+                    id="start_time"
                     type="time"
                     value={bookingForm.start_time}
                     onChange={(e) => setBookingForm({...bookingForm, start_time: e.target.value})}
@@ -548,8 +554,9 @@ const App = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label>Horário de Fim *</label>
+                  <label htmlFor="end_time">Horário de Fim *</label>
                   <input
+                    id="end_time"
                     type="time"
                     value={bookingForm.end_time}
                     onChange={(e) => setBookingForm({...bookingForm, end_time: e.target.value})}
@@ -560,8 +567,9 @@ const App = () => {
               </div>
               
               <div className="form-group">
-                <label>Título da Reunião *</label>
+                <label htmlFor="title">Título da Reunião *</label>
                 <input
+                  id="title"
                   type="text"
                   value={bookingForm.title}
                   onChange={(e) => setBookingForm({...bookingForm, title: e.target.value})}
@@ -572,8 +580,9 @@ const App = () => {
               </div>
               
               <div className="form-group">
-                <label>Participantes (opcional)</label>
+                <label htmlFor="participants">Participantes (opcional)</label>
                 <textarea
+                  id="participants"
                   value={bookingForm.participants}
                   onChange={(e) => setBookingForm({...bookingForm, participants: e.target.value})}
                   placeholder="Liste os participantes da reunião"
