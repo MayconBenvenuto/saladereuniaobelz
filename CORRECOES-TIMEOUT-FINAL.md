@@ -87,7 +87,7 @@ res.setTimeout(50000);
 SUPABASE_KEY=sb_publishable_eMWxsstsCHetcQ3Epei_nw_kS_NWcff
 
 # DEPOIS (JWT completo)
-SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1bWJwcXdqaGF3a2RxbHFhZ29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY3NzY1NzQsImV4cCI6MjA1MjM1MjU3NH0.v6Bt6wGLZS8eMWxsstsCHetcQ3Epei_nw_kS_NWcff8
+SUPABASE_KEY=<SUA_CHAVE_JWT_COMPLETA_AQUI>
 ```
 
 ## 🧪 COMO TESTAR AS CORREÇÕES
@@ -110,8 +110,8 @@ npm start
 1. Vá em: Vercel Dashboard > Projeto > Settings > Environment Variables
 2. Adicione/atualize:
    ```
-   SUPABASE_URL=https://dumbpqwjhawkdqlqagoo.supabase.co
-   SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1bWJwcXdqaGF3a2RxbHFhZ29vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzY3NzY1NzQsImV4cCI6MjA1MjM1MjU3NH0.v6Bt6wGLZS8eMWxsstsCHetcQ3Epei_nw_kS_NWcff8
+   SUPABASE_URL=<SUA_URL_AQUI>
+   SUPABASE_KEY=<SUA_CHAVE_JWT_COMPLETA_AQUI>
    ```
 3. Faça redeploy do projeto
 

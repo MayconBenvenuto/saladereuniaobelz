@@ -79,7 +79,7 @@ agenthub/agents/youtube/db
 # Mobile development
 android-sdk/ 
 
-# Environment variables
+# Environment variables - CRÍTICO: Nunca commitar chaves de API!
 .env
 .env.local
 .env.development.local
@@ -90,4 +90,19 @@ android-sdk/
 .env.test
 .env.production
 .env.staging
+**/.env*
+!.env.example
+
+# Arquivos de configuração sensíveis
+*config.json*
+*secrets.json*
+*credentials.json*
+*token.json*
+*keys.json*
+*private-key*
+*service-account*
+*.pem
+*.key
+*.p12
+*.jks
 

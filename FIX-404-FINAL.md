@@ -54,10 +54,10 @@ O erro 404 persiste porque a configuração do `vercel.json` não estava lidando
 ### PASSO 1: Verificar Variáveis na Vercel
 No painel da Vercel, confirme estas variáveis:
 ```
-SUPABASE_URL=https://dumbpqwjhawkdqlqagoo.supabase.co
-SUPABASE_KEY=sb_publishable_eMWxsstsCHetcQ3Epei_nw_kS_NWcff
-REACT_APP_SUPABASE_URL=https://dumbpqwjhawkdqlqagoo.supabase.co
-REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sb_publishable_eMWxsstsCHetcQ3Epei_nw_kS_NWcff
+SUPABASE_URL=<SUA_URL_AQUI>
+SUPABASE_KEY=<SUA_CHAVE_AQUI>
+REACT_APP_SUPABASE_URL=<SUA_URL_AQUI>
+REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY=<SUA_CHAVE_AQUI>
 ```
 
 ### PASSO 2: Deploy

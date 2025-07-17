@@ -44,10 +44,10 @@ FOR ALL USING (true);
 No painel da Vercel, adicione estas variáveis:
 
 ```
-SUPABASE_URL=https://dumbpqwjhawkdqlqagoo.supabase.co
-SUPABASE_KEY=sb_publishable_eMWxsstsCHetcQ3Epei_nw_kS_NWcff
-REACT_APP_SUPABASE_URL=https://dumbpqwjhawkdqlqagoo.supabase.co
-REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sb_publishable_eMWxsstsCHetcQ3Epei_nw_kS_NWcff
+SUPABASE_URL=<SUA_URL_AQUI>
+SUPABASE_KEY=<SUA_CHAVE_AQUI>
+REACT_APP_SUPABASE_URL=<SUA_URL_AQUI>
+REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY=<SUA_CHAVE_AQUI>
 ```
 
 ### 3. Configuração do vercel.json (JÁ CORRIGIDA)

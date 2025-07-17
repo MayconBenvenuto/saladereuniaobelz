@@ -72,8 +72,8 @@ Os horários não aparecem em produção devido a:
 **IMPORTANTE:** Certifique-se de que estas variáveis estão configuradas na Vercel:
 
 ```
-SUPABASE_URL=https://dumbpqwjhawkdqlqagoo.supabase.co
-SUPABASE_KEY=sb_publishable_eMWxsstsCHetcQ3Epei_nw_kS_NWcff
+SUPABASE_URL=<SUA_URL_AQUI>
+SUPABASE_KEY=<SUA_CHAVE_AQUI>
 ```
 
 **Como configurar:**
