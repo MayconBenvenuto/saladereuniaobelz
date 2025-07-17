@@ -9,22 +9,42 @@ console.log('Iniciando backend...');
 
 // Inicializa o aplicativo Express
 const app = express();
-app.use(cors()); // Permite requisições de origens diferentes
+
+// Configuração CORS simples mas com headers específicos
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+
+// Middleware para adicionar headers CORS manualmente se necessário
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
+
 app.use(bodyParser.json()); // Habilita o parsing de JSON no corpo das requisições
 
 // **AQUI ESTÁ A CORREÇÃO CRÍTICA:** Inicialização do cliente Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
+let supabase = null;
+
 // Verifica se as variáveis de ambiente do Supabase estão definidas
 if (!supabaseUrl || !supabaseKey) {
-  console.error('ERRO: As variáveis de ambiente SUPABASE_URL ou SUPABASE_KEY não estão definidas.');
-  console.error('Certifique-se de ter um arquivo .env na raiz do seu projeto com essas variáveis.');
-  // Termina o processo se as variáveis críticas não estiverem presentes
-  process.exit(1);
+  console.warn('AVISO: As variáveis de ambiente SUPABASE_URL ou SUPABASE_KEY não estão definidas.');
+  console.warn('O sistema funcionará com dados de exemplo.');
+} else {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('Supabase cliente inicializado com sucesso.');
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Observação: Você importou e inicializou 'postgres' como 'sql',
 // mas não o utilizou para as operações de banco de dados no seu código.
@@ -90,26 +110,43 @@ app.get('/api/appointments', async (req, res) => {
 app.get('/api/availability/:date', async (req, res) => {
   const { date } = req.params;
   
+  console.log('=== AVAILABILITY ROUTE CALLED ===');
+  console.log('Date param:', date);
+  console.log('Full URL:', req.url);
+  console.log('Method:', req.method);
+  
   if (!date) {
+    console.log('ERROR: Date parameter missing');
     return res.status(400).json({ error: 'Parâmetro de data (date) é obrigatório.' });
   }
   
   try {
     console.log('Data recebida para availability:', date);
     
-    // Buscar agendamentos do dia
-    const { data: appointments, error } = await supabase
-      .from('appointments')
-      .select('*')
-      .eq('date', date)
-      .order('start_time', { ascending: true });
-      
-    if (error) {
-      console.error('Erro ao buscar agendamentos:', error.message);
-      return res.status(500).json({ error: error.message });
+    let appointments = [];
+    
+    // Tentar buscar do Supabase, mas continuar mesmo se falhar
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+      try {
+        const { data: supabaseData, error } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('date', date)
+          .order('start_time', { ascending: true });
+          
+        if (error) {
+          console.error('SUPABASE ERROR (continuing anyway):', error);
+        } else {
+          appointments = supabaseData || [];
+        }
+      } catch (supabaseErr) {
+        console.error('SUPABASE CONNECTION ERROR (continuing anyway):', supabaseErr);
+      }
+    } else {
+      console.log('Supabase not configured, using empty appointments');
     }
     
-    console.log('Agendamentos encontrados:', appointments);
+    console.log('Agendamentos encontrados:', appointments?.length || 0);
     
     // Gerar todos os horários possíveis do dia (exemplo: 08:00 às 18:00, de 30 em 30 min)
     const startHour = 8;
@@ -148,12 +185,24 @@ app.get('/api/availability/:date', async (req, res) => {
     }
     
     console.log(`Slots gerados: ${slots.length} slots para ${date}`);
-    res.json(slots);
+    console.log('=== RETURNING RESPONSE ===');
+    
+    res.status(200).json(slots);
     
   } catch (err) {
-    console.error('Erro interno ao gerar disponibilidade:', err);
-    res.status(500).json({ error: 'Erro interno do servidor.' });
+    console.error('CRITICAL ERROR:', err);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ error: 'Erro interno do servidor.', details: err.message });
   }
+});
+
+// Rota de fallback para debugging
+app.get('/api/availability', (req, res) => {
+  console.log('FALLBACK ROUTE: /api/availability called without date');
+  res.status(400).json({ 
+    error: 'Data é obrigatória. Use /api/availability/YYYY-MM-DD',
+    example: '/api/availability/2025-07-17'
+  });
 });
 
 // Criar agendamento

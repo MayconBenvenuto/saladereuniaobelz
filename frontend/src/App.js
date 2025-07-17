@@ -53,23 +53,6 @@ const App = () => {
     setTimeout(() => setSuccess(null), 3000);
   };
 
-  // Test API connection
-  const testAPI = useCallback(async () => {
-    try {
-      const testUrl = `${API_BASE_URL}/api/test`;
-      console.log('Testando API em:', testUrl);
-      
-      const response = await fetch(testUrl);
-      const data = await response.json();
-      
-      console.log('Teste da API:', data);
-      showSuccess('API está funcionando!');
-    } catch (error) {
-      console.error('Erro no teste da API:', error);
-      showError(`Erro no teste da API: ${error.message}`);
-    }
-  }, []);
-
   // Load availability with better error handling
   const loadAvailability = useCallback(async () => {
     setLoading(true);
@@ -304,14 +287,6 @@ const App = () => {
             disabled={loading}
           >
             →
-          </button>
-          {/* Botão de teste da API - remover após correção */}
-          <button 
-            className="nav-button"
-            onClick={testAPI}
-            style={{ marginLeft: '10px', backgroundColor: '#007bff', color: 'white' }}
-          >
-            Testar API
           </button>
         </div>
 
