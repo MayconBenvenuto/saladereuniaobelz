@@ -114,6 +114,10 @@ app.get('/api/availability/:date', async (req, res) => {
   console.log('Date param:', date);
   console.log('Full URL:', req.url);
   console.log('Method:', req.method);
+  console.log('Environment Variables Check:');
+  console.log('SUPABASE_URL exists:', !!process.env.SUPABASE_URL);
+  console.log('SUPABASE_KEY exists:', !!process.env.SUPABASE_KEY);
+  console.log('NODE_ENV:', process.env.NODE_ENV);
   
   if (!date) {
     console.log('ERROR: Date parameter missing');
@@ -126,8 +130,9 @@ app.get('/api/availability/:date', async (req, res) => {
     let appointments = [];
     
     // Tentar buscar do Supabase, mas continuar mesmo se falhar
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY && supabase) {
       try {
+        console.log('Tentando conectar ao Supabase...');
         const { data: supabaseData, error } = await supabase
           .from('appointments')
           .select('*')
@@ -138,12 +143,18 @@ app.get('/api/availability/:date', async (req, res) => {
           console.error('SUPABASE ERROR (continuing anyway):', error);
         } else {
           appointments = supabaseData || [];
+          console.log('Dados do Supabase carregados com sucesso:', appointments.length, 'appointments');
         }
       } catch (supabaseErr) {
         console.error('SUPABASE CONNECTION ERROR (continuing anyway):', supabaseErr);
       }
     } else {
-      console.log('Supabase not configured, using empty appointments');
+      console.log('Supabase not configured properly, using empty appointments');
+      console.log('Missing:', {
+        url: !process.env.SUPABASE_URL,
+        key: !process.env.SUPABASE_KEY,
+        client: !supabase
+      });
     }
     
     console.log('Agendamentos encontrados:', appointments?.length || 0);
@@ -186,13 +197,50 @@ app.get('/api/availability/:date', async (req, res) => {
     
     console.log(`Slots gerados: ${slots.length} slots para ${date}`);
     console.log('=== RETURNING RESPONSE ===');
+    console.log('Primeiro slot:', slots[0]);
+    console.log('Último slot:', slots[slots.length - 1]);
+    
+    // Garantir headers corretos
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-cache');
     
     res.status(200).json(slots);
     
   } catch (err) {
     console.error('CRITICAL ERROR:', err);
     console.error('Error stack:', err.stack);
-    res.status(500).json({ error: 'Erro interno do servidor.', details: err.message });
+    
+    // Em caso de erro crítico, retornar horários padrão
+    const defaultSlots = [];
+    const startHour = 8;
+    const endHour = 18;
+    const slotDuration = 30;
+    
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let min = 0; min < 60; min += slotDuration) {
+        const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        const endMin = min + slotDuration;
+        let endHourSlot = hour;
+        let endMinSlot = endMin;
+        
+        if (endMin >= 60) {
+          endHourSlot++;
+          endMinSlot = endMin - 60;
+        }
+        
+        const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
+        
+        defaultSlots.push({
+          start_time: start,
+          end_time: end,
+          available: true,
+          appointment: null
+        });
+      }
+    }
+    
+    console.log('Retornando slots padrão devido a erro:', defaultSlots.length);
+    res.status(200).json(defaultSlots);
   }
 });
 
@@ -205,6 +253,25 @@ app.get('/api/availability', (req, res) => {
   });
 });
 
+// Rota de teste para verificar se a API está funcionando
+app.get('/api/test', (req, res) => {
+  console.log('=== API TEST ROUTE ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Environment Variables:');
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('SUPABASE_URL exists:', !!process.env.SUPABASE_URL);
+  console.log('SUPABASE_KEY exists:', !!process.env.SUPABASE_KEY);
+  console.log('Supabase client exists:', !!supabase);
+  
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    supabase_configured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_KEY && supabase),
+    message: 'API está funcionando!'
+  });
+});
+
 // Criar agendamento
 app.post('/api/appointments', async (req, res) => {
   const { title, description, name, date, start_time, end_time } = req.body;
@@ -214,6 +281,14 @@ app.post('/api/appointments', async (req, res) => {
   }
 
   console.log(`Verificando conflitos para data: ${date}, início: ${start_time}, fim: ${end_time}`);
+  
+  // Verificar se o Supabase está disponível
+  if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+    console.error('Supabase não está configurado. Não é possível criar agendamentos.');
+    return res.status(503).json({ 
+      error: 'Serviço de banco de dados não está disponível. Entre em contato com o administrador.' 
+    });
+  }
   
   try {
     // Verificar conflito

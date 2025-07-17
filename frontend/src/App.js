@@ -53,6 +53,39 @@ const App = () => {
     setTimeout(() => setSuccess(null), 3000);
   };
 
+  // Generate default time slots as fallback
+  const generateDefaultSlots = () => {
+    const slots = [];
+    const startHour = 8;
+    const endHour = 18;
+    const slotDuration = 30;
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let min = 0; min < 60; min += slotDuration) {
+        const start = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+        const endMin = min + slotDuration;
+        let endHourSlot = hour;
+        let endMinSlot = endMin;
+
+        if (endMin >= 60) {
+          endHourSlot++;
+          endMinSlot = endMin - 60;
+        }
+
+        const end = `${String(endHourSlot).padStart(2, '0')}:${String(endMinSlot).padStart(2, '0')}`;
+
+        slots.push({
+          start_time: start,
+          end_time: end,
+          available: true,
+          appointment: null
+        });
+      }
+    }
+
+    return slots;
+  };
+
   // Load availability with better error handling
   const loadAvailability = useCallback(async () => {
     setLoading(true);
@@ -71,6 +104,8 @@ const App = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        // Adicionar timeout para produção
+        signal: AbortSignal.timeout(15000)
       });
       
       console.log('Response status:', response.status);
@@ -86,16 +121,30 @@ const App = () => {
       console.log('Data recebida:', data);
       console.log('Tipo de data:', typeof data, Array.isArray(data));
       
-      setAvailability(data);
+      // Garantir que sempre temos um array válido
+      if (Array.isArray(data)) {
+        setAvailability({ slots: data });
+      } else if (data && Array.isArray(data.slots)) {
+        setAvailability(data);
+      } else {
+        console.warn('Dados recebidos não estão no formato esperado:', data);
+        // Fallback: criar horários padrão do lado do cliente
+        setAvailability({ slots: generateDefaultSlots() });
+      }
     } catch (error) {
       console.error('Error loading availability:', error);
       console.error('Error stack:', error.stack);
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        showError('Erro de conexão com o servidor. Verifique se o serviço está funcionando.');
+        showError('Erro de conexão com o servidor. Mostrando horários padrão.');
+      } else if (error.name === 'TimeoutError') {
+        showError('Timeout na conexão. Mostrando horários padrão.');
       } else {
         showError(`Erro ao carregar disponibilidade: ${error.message}`);
       }
+      
+      // Em caso de erro, criar horários padrão do lado do cliente
+      setAvailability({ slots: generateDefaultSlots() });
     } finally {
       setLoading(false);
     }
