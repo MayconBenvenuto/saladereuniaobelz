@@ -3,85 +3,64 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
-const path = require('path');
+
+console.log('=== BACKEND STARTING ===');
 
 // Carregamento mais robusto das variáveis de ambiente
-try {
-  if (process.env.NODE_ENV !== 'production') {
-    require('dotenv').config({ path: path.join(__dirname, '../.env') });
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    require('dotenv').config();
+  } catch (error) {
+    console.warn('Dotenv não carregado:', error.message);
   }
-} catch (error) {
-  console.warn('Dotenv não carregado (normal em produção):', error.message);
 }
-
-console.log('Iniciando backend...');
 
 // Inicializa o aplicativo Express
 const app = express();
 
-// Configuração CORS completa
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'https://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
-    'Accept', 
-    'Origin', 
-    'Cache-Control',
-    'Pragma',
-    'X-Content-Type-Options'
-  ],
-  exposedHeaders: ['X-Content-Type-Options', 'Cache-Control'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
+// Configuração CORS simplificada para produção
+if (process.env.NODE_ENV === 'production') {
+  app.use(cors({
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200
+  }));
+} else {
+  app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With', 
+      'Accept', 
+      'Origin', 
+      'Cache-Control'
+    ],
+    optionsSuccessStatus: 204
+  }));
+}
 
-// Headers CORS adicionais para garantir compatibilidade
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma, X-Content-Type-Options');
-  res.header('Access-Control-Expose-Headers', 'X-Content-Type-Options, Cache-Control');
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(204);
-  } else {
-    next();
-  }
-});
+app.use(bodyParser.json());
 
-app.use(bodyParser.json()); // Habilita o parsing de JSON no corpo das requisições
-
-// **AQUI ESTÁ A CORREÇÃO CRÍTICA:** Inicialização do cliente Supabase
+// Inicialização do cliente Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
-
-console.log('=== VARIÁVEIS DE AMBIENTE DEBUG ===');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('VERCEL:', process.env.VERCEL);
-console.log('SUPABASE_URL:', supabaseUrl ? 'Configurada' : 'NÃO configurada');
-console.log('SUPABASE_KEY:', supabaseKey ? `Configurada (${supabaseKey.length} chars)` : 'NÃO configurada');
-console.log('SUPABASE_URL value:', supabaseUrl?.substring(0, 50) + '...');
 
 let supabase = null;
 
 // Verifica se as variáveis de ambiente do Supabase estão definidas
 if (!supabaseUrl || !supabaseKey) {
-  console.warn('AVISO: As variáveis de ambiente SUPABASE_URL ou SUPABASE_KEY não estão definidas.');
-  console.warn('O sistema funcionará com dados de exemplo.');
+  console.error('ERRO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas');
 } else {
   supabase = createClient(supabaseUrl, supabaseKey);
-  console.log('Supabase cliente inicializado com sucesso.');
+  console.log('Supabase inicializado');
 }
 
-// Observação: Você importou e inicializou 'postgres' como 'sql',
-// mas não o utilizou para as operações de banco de dados no seu código.
-
-// Health check endpoint
+// Health check endpoint - MAIS RÁPIDO
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
