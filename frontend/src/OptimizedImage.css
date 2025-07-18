@@ -1,0 +1,72 @@
+/* Estilos para imagens otimizadas */
+.image-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5;
+  border: 2px dashed #ddd;
+  color: #666;
+}
+
+.image-placeholder {
+  text-align: center;
+  padding: 1rem;
+}
+
+.image-placeholder span {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.image-placeholder small {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+/* Transições suaves para carregamento de imagens */
+img {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+img.loaded {
+  opacity: 1;
+}
+
+/* Skeleton loading para imagens */
+.image-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Responsivo para imagens */
+@media (max-width: 768px) {
+  .room-image {
+    height: 150px;
+  }
+  
+  .room-image-container {
+    min-height: 150px;
+  }
+}
+
+@media (max-width: 480px) {
+  .room-image {
+    height: 120px;
+  }
+  
+  .room-image-container {
+    min-height: 120px;
+  }
+}

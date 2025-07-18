@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import './App-mobile.css';
+import './OptimizedImage.css';
 import { config, logDebug, logError } from './config';
 import { useApi } from './useApi';
+import OptimizedImage from './OptimizedImage';
+import { useImagePreload } from './useImageCache';
 
 // Função para detectar se estamos offline
 const isOnline = () => {
@@ -61,6 +64,15 @@ const App = () => {
   
   // Hook personalizado para API
   const { loading, error, request, setError, connectionStatus, isOnline } = useApi();
+
+  // Preload das imagens importantes
+  const imagesToPreload = useMemo(() => [
+    'logo-belz.png',
+    'sala.jpg',
+    'https://images.unsplash.com/photo-1517502884422-41eaead166d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxjb25mZXJlbmNlJTIwcm9vbXxlbnwwfHx8fDE3NTI1MTU3NjZ8MA&ixlib=rb-4.1.0&q=85&w=400'
+  ], []);
+  
+  useImagePreload(imagesToPreload);
 
   // Format date for API calls
   const formatDateForAPI = (date) => {
@@ -414,18 +426,21 @@ const App = () => {
       <header className="header">
         <div className="header-content">
           <div className="logo-container">
-            <img 
+            <OptimizedImage 
               src="logo-belz.png"
               alt="Belz Corretora de Seguros"
               className="logo"
+              loading="eager"
             />
             <h1>Belz Corretora de Seguros</h1>
           </div>
           <div className="room-image-container">
-            <img 
-              src="https://images.unsplash.com/photo-1517502884422-41eaead166d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxjb25mZXJlbmNlJTIwcm9vbXxlbnwwfHx8fDE3NTI1MTU3NjZ8MA&ixlib=rb-4.1.0&q=85"
+            <OptimizedImage 
+              src="sala.jpg"
               alt="Sala de Reunião"
               className="room-image"
+              loading="lazy"
+              fallbackSrc="https://images.unsplash.com/photo-1517502884422-41eaead166d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxjb25mZXJlbmNlJTIwcm9vbXxlbnwwfHx8fDE3NTI1MTU3NjZ8MA&ixlib=rb-4.1.0&q=85&w=400"
             />
             <div className="room-overlay">
               <h2>Sala de Reunião</h2>
