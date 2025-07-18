@@ -54,10 +54,28 @@ function isValidDate(dateString) {
   return date.toISOString().startsWith(dateString);
 }
 
-// Função para validar formato de horário
+// Função para validar formato de horário (aceita HH:MM ou HH:MM:SS)
 function isValidTime(timeString) {
-  const regex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
-  return regex.test(timeString);
+  const regexWithSeconds = /^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+  const regexWithoutSeconds = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  return regexWithSeconds.test(timeString) || regexWithoutSeconds.test(timeString);
+}
+
+// Função para normalizar horário para HH:MM:SS
+function normalizeTime(timeString) {
+  if (!timeString) return timeString;
+  
+  // Se já tem segundos, retorna como está
+  if (timeString.includes(':') && timeString.split(':').length === 3) {
+    return timeString;
+  }
+  
+  // Se só tem HH:MM, adiciona :00
+  if (timeString.includes(':') && timeString.split(':').length === 2) {
+    return timeString + ':00';
+  }
+  
+  return timeString;
 }
 
 // Função para comprimir resposta se necessário
@@ -242,6 +260,10 @@ module.exports = async (req, res) => {
             return;
           }
           
+          // Normalizar horários para formato HH:MM:SS
+          const normalizedStartTime = normalizeTime(start_time);
+          const normalizedEndTime = normalizeTime(end_time);
+          
           // Validações de formato
           if (!isValidDate(date)) {
             res.status(400).json({ 
@@ -252,24 +274,31 @@ module.exports = async (req, res) => {
             return;
           }
           
-          if (!isValidTime(start_time) || !isValidTime(end_time)) {
+          if (!isValidTime(normalizedStartTime) || !isValidTime(normalizedEndTime)) {
             res.status(400).json({ 
-              error: 'Formato de horário inválido. Use HH:MM:SS',
+              error: 'Formato de horário inválido. Use HH:MM ou HH:MM:SS',
               requestId,
-              received: { start_time, end_time }
+              received: { start_time: normalizedStartTime, end_time: normalizedEndTime }
             });
             return;
           }
           
           // Validar se horário de fim é após horário de início
-          if (start_time >= end_time) {
+          if (normalizedStartTime >= normalizedEndTime) {
             res.status(400).json({ 
               error: 'Horário de fim deve ser posterior ao horário de início',
               requestId,
-              received: { start_time, end_time }
+              received: { start_time: normalizedStartTime, end_time: normalizedEndTime }
             });
             return;
           }
+          
+          // Atualizar os dados com horários normalizados
+          const normalizedAppointmentData = {
+            ...appointmentData,
+            start_time: normalizedStartTime,
+            end_time: normalizedEndTime
+          };
           
           // Verificar conflitos antes de inserir
           const { data: conflicts } = await Promise.race([
@@ -277,7 +306,7 @@ module.exports = async (req, res) => {
               .from('agendamentos')
               .select('id, name, start_time, end_time')
               .eq('date', date)
-              .or(`and(start_time.lte.${start_time},end_time.gt.${start_time}),and(start_time.lt.${end_time},end_time.gte.${end_time}),and(start_time.gte.${start_time},end_time.lte.${end_time})`),
+              .or(`and(start_time.lte.${normalizedStartTime},end_time.gt.${normalizedStartTime}),and(start_time.lt.${normalizedEndTime},end_time.gte.${normalizedEndTime}),and(start_time.gte.${normalizedStartTime},end_time.lte.${normalizedEndTime})`),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Timeout')), 12000)
             )
@@ -297,7 +326,7 @@ module.exports = async (req, res) => {
           const { data, error } = await Promise.race([
             supabase
               .from('agendamentos')
-              .insert([appointmentData])
+              .insert([normalizedAppointmentData])
               .select(),
             new Promise((_, reject) => 
               setTimeout(() => reject(new Error('Timeout')), 12000)
