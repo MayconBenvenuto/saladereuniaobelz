@@ -9,7 +9,7 @@
       }
     },
     {
-      "src": "api/vercel.js",
+      "src": "api/vercel-simple.js",
       "use": "@vercel/node",
       "config": {
         "maxDuration": 30
@@ -25,12 +25,12 @@
   ],
   "routes": [
     {
-      "src": "/api/test-direct",
+      "src": "/api/test-direct(.*)",
       "dest": "/api/test-direct.js"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/vercel.js"
+      "dest": "/api/vercel-simple.js"
     },
     {
       "src": "/static/(.*)",
