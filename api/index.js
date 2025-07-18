@@ -116,8 +116,8 @@ app.get('/api/appointments', async (req, res) => {
           title: 'Reunião de Exemplo',
           name: 'Sistema',
           date: date,
-          start_time: '09:00:00',
-          end_time: '10:00:00',
+          start_time: '14:00:00',
+          end_time: '15:00:00',
           description: 'Agendamento de exemplo'
         }
       ];
@@ -197,8 +197,8 @@ app.get('/api/availability/:date', async (req, res) => {
             id: 1,
             name: 'Sistema',
             title: 'Reunião de Exemplo',
-            start_time: '09:00:00',
-            end_time: '10:00:00'
+            start_time: '14:00:00',
+            end_time: '15:00:00'
           }
         ];
       }
@@ -215,7 +215,7 @@ app.get('/api/availability/:date', async (req, res) => {
       occupied: appointments,
       slots_config: {
         start_hour: 8,
-        end_hour: 18,
+        end_hour: 20,
         slot_duration: 30
       }
     });
@@ -230,7 +230,7 @@ app.get('/api/availability/:date', async (req, res) => {
       occupied: [],
       slots_config: {
         start_hour: 8,
-        end_hour: 18,
+        end_hour: 20,
         slot_duration: 30
       }
     });
@@ -241,7 +241,7 @@ app.get('/api/availability/:date', async (req, res) => {
 function generateTimeSlots(appointments = []) {
   const slots = [];
   const startHour = 8;
-  const endHour = 18;
+  const endHour = 20;
   const slotDuration = 30;
   
   for (let hour = startHour; hour < endHour; hour++) {
@@ -342,7 +342,12 @@ app.post('/api/appointments', async (req, res) => {
 
   try {
     console.log('=== CRIANDO AGENDAMENTO ===');
-    console.log('Dados:', { title, name, date, start_time, end_time });
+    console.log('Dados recebidos:', { title, name, date, start_time, end_time });
+    console.log('Supabase configurado:', !!supabase);
+    console.log('Environment vars:', {
+      SUPABASE_URL: !!process.env.SUPABASE_URL,
+      SUPABASE_KEY: !!process.env.SUPABASE_KEY
+    });
 
     // Usar método tradicional diretamente (mais confiável)
     return await createAppointmentTraditional(req, res, { title, description, name, date, start_time, end_time });
@@ -355,6 +360,24 @@ app.post('/api/appointments', async (req, res) => {
 
 // Função helper para criar agendamento tradicional com retry
 async function createAppointmentTraditional(req, res, { title, description, name, date, start_time, end_time }) {
+  // Se o Supabase não estiver configurado, simular agendamento
+  if (!supabase || !process.env.SUPABASE_URL || !process.env.SUPABASE_KEY) {
+    console.log('Supabase não configurado - criando agendamento simulado');
+    const mockAppointment = {
+      id: Date.now(),
+      title,
+      description,
+      name,
+      date,
+      start_time,
+      end_time,
+      created_at: new Date().toISOString()
+    };
+    
+    console.log('Agendamento simulado criado:', mockAppointment);
+    return res.status(201).json(mockAppointment);
+  }
+
   const maxRetries = 3;
   let attempt = 0;
   
@@ -382,15 +405,40 @@ async function createAppointmentTraditional(req, res, { title, description, name
         throw new Error(`Erro ao verificar conflitos: ${errorCheck.message}`);
       }
 
+      console.log('Verificando conflitos para:', { start_time, end_time });
+      console.log('Agendamentos existentes:', conflitos);
+
+      // Função helper para converter time string em minutos
+      const timeToMinutes = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+      };
+
+      const newStartMinutes = timeToMinutes(start_time);
+      const newEndMinutes = timeToMinutes(end_time);
+
       const conflitou = conflitos?.some(appt => {
-        return (
-          (start_time >= appt.start_time && start_time < appt.end_time) ||
-          (end_time > appt.start_time && end_time <= appt.end_time) ||
-          (start_time <= appt.start_time && end_time >= appt.end_time)
+        const existingStartMinutes = timeToMinutes(appt.start_time);
+        const existingEndMinutes = timeToMinutes(appt.end_time);
+        
+        console.log('Comparando:', {
+          novo: { start: newStartMinutes, end: newEndMinutes },
+          existente: { start: existingStartMinutes, end: existingEndMinutes, id: appt.id }
+        });
+        
+        // Verificar sobreposição real
+        const overlap = (
+          (newStartMinutes >= existingStartMinutes && newStartMinutes < existingEndMinutes) ||
+          (newEndMinutes > existingStartMinutes && newEndMinutes <= existingEndMinutes) ||
+          (newStartMinutes <= existingStartMinutes && newEndMinutes >= existingEndMinutes)
         );
+        
+        console.log('Conflito detectado:', overlap);
+        return overlap;
       });
 
       if (conflitou) {
+        console.log('CONFLITO: Horário já ocupado');
         return res.status(409).json({ error: 'Horário já ocupado por outro agendamento.' });
       }
 

@@ -245,6 +245,11 @@ const AppFreePeriods = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [slotsConfig, setSlotsConfig] = useState({
+    start_hour: 8,
+    end_hour: 20,
+    slot_duration: 30
+  });
   
   // Hook personalizado para API
   const { loading, error, request, setError } = useApi();
@@ -277,8 +282,32 @@ const AppFreePeriods = () => {
 
   // Gerar slots com a nova lógica flexível
   const timeSlots = useMemo(() => {
-    return generateTimeSlots(appointments);
-  }, [appointments]);
+    const { start_hour, end_hour, slot_duration } = slotsConfig;
+    return generateTimeSlots(appointments, start_hour, end_hour, slot_duration);
+  }, [appointments, slotsConfig]);
+
+  // Carregar configuração de slots do backend
+  const loadSlotsConfig = useCallback(async () => {
+    const dateStr = formatDateForAPI(selectedDate);
+    
+    try {
+      logDebug(`Carregando configuração de slots para: ${dateStr}`);
+      
+      const data = await request(`${config.API_BASE_URL}/api/availability/${dateStr}`, {
+        method: 'GET'
+      });
+      
+      // Atualizar configuração se vier do backend
+      if (data && data.slots_config) {
+        setSlotsConfig(data.slots_config);
+        logDebug('Configuração de slots atualizada:', data.slots_config);
+      }
+      
+    } catch (error) {
+      logError('Erro ao carregar configuração de slots:', error);
+      // Manter configuração padrão em caso de erro
+    }
+  }, [selectedDate, request]);
 
   // Carregar agendamentos do dia
   const loadAppointments = useCallback(async () => {
@@ -328,10 +357,11 @@ const AppFreePeriods = () => {
     }
   }, [selectedDate, request]);
 
-  // Carregar agendamentos quando a data muda
+  // Carregar agendamentos e configuração quando a data muda
   useEffect(() => {
+    loadSlotsConfig();
     loadAppointments();
-  }, [loadAppointments]);
+  }, [loadSlotsConfig, loadAppointments]);
 
   // Manipular seleção de slot
   const handleSlotClick = (slot) => {
@@ -475,34 +505,9 @@ const AppFreePeriods = () => {
           </div>
         )}
 
-        {/* Grade de horários com design original */}
-        <div className="calendar-container">
-          <div className="time-slots">
-            {timeSlots.map((slot, index) => (
-              <div
-                key={index}
-                className={`time-slot ${slot.available ? 'available' : 'occupied'}`}
-                onClick={() => handleSlotClick(slot)}
-              >
-                <div className="time-range">
-                  {slot.start_time} - {slot.end_time}
-                </div>
-                {slot.available ? (
-                  <div className="slot-status">Disponível</div>
-                ) : (
-                  <div className="appointment-info">
-                    <div className="appointment-title">{slot.appointment.title}</div>
-                    <div className="appointment-name">{slot.appointment.name}</div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Lista de agendamentos do dia */}
         {appointments.length > 0 && (
-          <div style={{ marginTop: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }}>
             <h3 style={{ marginBottom: '1rem', color: '#2a5298' }}>
               Agendamentos do Dia ({appointments.length})
             </h3>
@@ -546,6 +551,31 @@ const AppFreePeriods = () => {
             </div>
           </div>
         )}
+
+        {/* Grade de horários com design original */}
+        <div className="calendar-container">
+          <div className="time-slots">
+            {timeSlots.map((slot, index) => (
+              <div
+                key={index}
+                className={`time-slot ${slot.available ? 'available' : 'occupied'}`}
+                onClick={() => handleSlotClick(slot)}
+              >
+                <div className="time-range">
+                  {slot.start_time} - {slot.end_time}
+                </div>
+                {slot.available ? (
+                  <div className="slot-status">Disponível</div>
+                ) : (
+                  <div className="appointment-info">
+                    <div className="appointment-title">{slot.appointment.title}</div>
+                    <div className="appointment-name">{slot.appointment.name}</div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Modal de agendamento */}
