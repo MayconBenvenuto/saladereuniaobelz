@@ -1,27 +1,88 @@
 // API otimizada funcional para sistema de agendamentos
 const { createClient } = require('@supabase/supabase-js');
 
+// Cache simples em memória para reduzir consultas desnecessárias
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+// Função para cache com TTL
+function getCached(key) {
+  const item = cache.get(key);
+  if (item && Date.now() - item.timestamp < CACHE_TTL) {
+    return item.data;
+  }
+  cache.delete(key);
+  return null;
+}
+
+function setCache(key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+  
+  // Limpar cache antigo periodicamente
+  if (cache.size > 100) {
+    const now = Date.now();
+    for (const [k, v] of cache.entries()) {
+      if (now - v.timestamp > CACHE_TTL) {
+        cache.delete(k);
+      }
+    }
+  }
+}
+
 // Inicialização do Supabase
 let supabase = null;
 try {
   if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
     supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false }
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+      global: { headers: { 'x-application-name': 'agendamentos-belz' } }
     });
   }
 } catch (error) {
   console.log('⚠️ Supabase não inicializado:', error.message);
 }
 
-module.exports = async (req, res) => {
-  const startTime = Date.now();
-  console.log(`🚀 [${new Date().toISOString()}] ${req.method} ${req.url}`);
+// Função para validar formato de data
+function isValidDate(dateString) {
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!regex.test(dateString)) return false;
   
-  // CORS headers
+  const date = new Date(dateString);
+  const timestamp = date.getTime();
+  
+  if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) return false;
+  return date.toISOString().startsWith(dateString);
+}
+
+// Função para validar formato de horário
+function isValidTime(timeString) {
+  const regex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+  return regex.test(timeString);
+}
+
+// Função para comprimir resposta se necessário
+function setResponseHeaders(res, cacheable = false) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  
+  if (cacheable) {
+    res.setHeader('Cache-Control', 'public, max-age=300'); // 5 minutos
+  } else {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+}
+
+module.exports = async (req, res) => {
+  const startTime = Date.now();
+  const requestId = Math.random().toString(36).substr(2, 9);
+  console.log(`🚀 [${new Date().toISOString()}] [${requestId}] ${req.method} ${req.url}`);
+  
+  // Configurar headers de resposta
+  setResponseHeaders(res);
   
   // Handle OPTIONS
   if (req.method === 'OPTIONS') {
@@ -35,39 +96,78 @@ module.exports = async (req, res) => {
     const path = url.pathname;
     const query = Object.fromEntries(url.searchParams);
     
-    // Routing
+    // Routing com logs de performance
     if (path === '/api/ping' || path === '/ping') {
+      setResponseHeaders(res, true);
+      const duration = Date.now() - startTime;
       res.status(200).json({
         status: 'pong',
         timestamp: new Date().toISOString(),
-        duration: Date.now() - startTime,
-        message: 'API funcionando!'
+        duration,
+        requestId,
+        message: 'API otimizada funcionando!'
       });
+      console.log(`✅ [${requestId}] Ping responded in ${duration}ms`);
       return;
     }
     
     if (path === '/api/health' || path === '/health') {
+      const duration = Date.now() - startTime;
       res.status(200).json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        duration: Date.now() - startTime,
+        duration,
+        requestId,
         supabase: !!supabase,
-        environment: process.env.NODE_ENV || 'production'
+        environment: process.env.NODE_ENV || 'production',
+        cache: {
+          size: cache.size,
+          maxSize: 100
+        }
       });
+      console.log(`✅ [${requestId}] Health check responded in ${duration}ms`);
       return;
     }
     
-    // Appointments endpoint
+    // Appointments endpoint com cache
     if (path === '/api/appointments' && req.method === 'GET') {
       const { date } = query;
       
       if (!date) {
-        res.status(400).json({ error: 'Parâmetro date é obrigatório' });
+        res.status(400).json({ 
+          error: 'Parâmetro date é obrigatório',
+          requestId,
+          example: '?date=2025-07-18'
+        });
+        return;
+      }
+      
+      // Validar formato da data
+      if (!isValidDate(date)) {
+        res.status(400).json({ 
+          error: 'Formato de data inválido. Use YYYY-MM-DD',
+          requestId,
+          received: date
+        });
+        return;
+      }
+      
+      // Verificar cache primeiro
+      const cacheKey = `appointments:${date}`;
+      const cached = getCached(cacheKey);
+      
+      if (cached) {
+        const duration = Date.now() - startTime;
+        setResponseHeaders(res, true);
+        res.status(200).json(cached);
+        console.log(`⚡ [${requestId}] Appointments (cached): ${cached.length} found in ${duration}ms`);
         return;
       }
       
       if (!supabase) {
-        res.status(200).json([]);
+        const emptyResult = [];
+        setCache(cacheKey, emptyResult);
+        res.status(200).json(emptyResult);
         return;
       }
       
@@ -78,24 +178,39 @@ module.exports = async (req, res) => {
           .eq('date', date)
           .order('start_time', { ascending: true }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 15000)
+          setTimeout(() => reject(new Error('Timeout')), 12000) // Reduzido para 12s
         )
       ]);
       
       if (error) {
-        res.status(500).json({ error: error.message });
+        console.error(`❌ [${requestId}] Database error:`, error.message);
+        res.status(500).json({ 
+          error: 'Erro ao consultar agendamentos',
+          requestId,
+          details: error.message 
+        });
         return;
       }
       
-      console.log(`✅ Appointments: ${data?.length || 0} found in ${Date.now() - startTime}ms`);
-      res.status(200).json(data || []);
+      const result = data || [];
+      const duration = Date.now() - startTime;
+      
+      // Armazenar no cache
+      setCache(cacheKey, result);
+      setResponseHeaders(res, true);
+      
+      res.status(200).json(result);
+      console.log(`✅ [${requestId}] Appointments: ${result.length} found in ${duration}ms`);
       return;
     }
     
-    // Create appointment endpoint (POST)
+    // Create appointment endpoint com validação melhorada
     if (path === '/api/appointments' && req.method === 'POST') {
       if (!supabase) {
-        res.status(500).json({ error: 'Banco de dados não disponível' });
+        res.status(500).json({ 
+          error: 'Banco de dados não disponível',
+          requestId 
+        });
         return;
       }
       
@@ -108,14 +223,50 @@ module.exports = async (req, res) => {
       req.on('end', async () => {
         try {
           const appointmentData = JSON.parse(body);
-          console.log(`📝 Criando agendamento:`, appointmentData);
+          console.log(`📝 [${requestId}] Criando agendamento:`, {
+            name: appointmentData.name,
+            date: appointmentData.date,
+            start_time: appointmentData.start_time,
+            end_time: appointmentData.end_time
+          });
           
           // Validar dados obrigatórios
           const { name, title, date, start_time, end_time } = appointmentData;
           
           if (!name || !title || !date || !start_time || !end_time) {
             res.status(400).json({ 
-              error: 'Dados obrigatórios: name, title, date, start_time, end_time' 
+              error: 'Dados obrigatórios: name, title, date, start_time, end_time',
+              requestId,
+              received: { name: !!name, title: !!title, date: !!date, start_time: !!start_time, end_time: !!end_time }
+            });
+            return;
+          }
+          
+          // Validações de formato
+          if (!isValidDate(date)) {
+            res.status(400).json({ 
+              error: 'Formato de data inválido. Use YYYY-MM-DD',
+              requestId,
+              received: date
+            });
+            return;
+          }
+          
+          if (!isValidTime(start_time) || !isValidTime(end_time)) {
+            res.status(400).json({ 
+              error: 'Formato de horário inválido. Use HH:MM:SS',
+              requestId,
+              received: { start_time, end_time }
+            });
+            return;
+          }
+          
+          // Validar se horário de fim é após horário de início
+          if (start_time >= end_time) {
+            res.status(400).json({ 
+              error: 'Horário de fim deve ser posterior ao horário de início',
+              requestId,
+              received: { start_time, end_time }
             });
             return;
           }
@@ -128,14 +279,15 @@ module.exports = async (req, res) => {
               .eq('date', date)
               .or(`and(start_time.lte.${start_time},end_time.gt.${start_time}),and(start_time.lt.${end_time},end_time.gte.${end_time}),and(start_time.gte.${start_time},end_time.lte.${end_time})`),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), 15000)
+              setTimeout(() => reject(new Error('Timeout')), 12000)
             )
           ]);
           
           if (conflicts && conflicts.length > 0) {
-            console.log(`❌ Conflito encontrado:`, conflicts[0]);
+            console.log(`❌ [${requestId}] Conflito encontrado:`, conflicts[0]);
             res.status(409).json({ 
               error: 'Horário já ocupado',
+              requestId,
               conflict: conflicts[0]
             });
             return;
@@ -148,25 +300,42 @@ module.exports = async (req, res) => {
               .insert([appointmentData])
               .select(),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), 15000)
+              setTimeout(() => reject(new Error('Timeout')), 12000)
             )
           ]);
           
           if (error) {
-            console.error(`❌ Erro ao inserir:`, error);
-            res.status(500).json({ error: error.message });
+            console.error(`❌ [${requestId}] Erro ao inserir:`, error);
+            res.status(500).json({ 
+              error: 'Erro ao criar agendamento',
+              requestId,
+              details: error.message 
+            });
             return;
           }
           
-          console.log(`✅ Agendamento criado em ${Date.now() - startTime}ms:`, data[0]);
+          const duration = Date.now() - startTime;
+          const created = data[0];
+          
+          // Invalidar cache para esta data
+          cache.delete(`appointments:${date}`);
+          cache.delete(`availability:${date}`);
+          
+          console.log(`✅ [${requestId}] Agendamento criado em ${duration}ms: ID ${created.id}`);
           res.status(201).json({
             message: 'Agendamento criado com sucesso',
-            appointment: data[0]
+            appointment: created,
+            requestId,
+            duration
           });
           
         } catch (parseError) {
-          console.error(`❌ Erro ao processar dados:`, parseError);
-          res.status(400).json({ error: 'Dados inválidos' });
+          console.error(`❌ [${requestId}] Erro ao processar dados:`, parseError);
+          res.status(400).json({ 
+            error: 'Dados JSON inválidos',
+            requestId,
+            details: parseError.message 
+          });
         }
       });
       
