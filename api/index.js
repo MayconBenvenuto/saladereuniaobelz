@@ -62,11 +62,20 @@ if (!supabaseUrl || !supabaseKey) {
 
 // Health check endpoint - MAIS RÁPIDO
 app.get('/api/health', (req, res) => {
+  console.log('Health check endpoint called');
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    supabase: !!supabase
+    supabase: !!supabase,
+    environment: process.env.NODE_ENV,
+    vercel: !!process.env.VERCEL
   });
+});
+
+// Endpoint super simples para teste de conectividade
+app.get('/api/ping', (req, res) => {
+  console.log('Ping endpoint called');
+  res.json({ pong: true, timestamp: new Date().toISOString() });
 });
 // Todas as suas operações estão usando o cliente 'supabase-js'.
 // Se você não pretende usar uma conexão PostgreSQL direta separada do Supabase client,
@@ -598,9 +607,6 @@ app.get('/api/check-availability/:date/:start_time/:end_time', async (req, res) 
   }
 });
 
-// Adaptação para Vercel Serverless Function
-const serverless = require('serverless-http');
-
 // Definir porta para desenvolvimento local
 const PORT = process.env.PORT || 3001;
 
@@ -613,4 +619,5 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   });
 }
 
-module.exports = serverless(app);
+// Exportar o app Express diretamente para o Vercel
+module.exports = app;

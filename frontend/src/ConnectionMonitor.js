@@ -40,14 +40,17 @@ class ConnectionMonitor {
 
   async healthCheck() {
     try {
-      // Usar Promise.race para timeout mais compatível
-      const fetchPromise = fetch(`${config.API_BASE_URL}/api/health`, {
+      const apiUrl = `${config.API_BASE_URL}/api/health`;
+      logDebug(`Fazendo health check para: ${apiUrl}`);
+      
+      // Usar Promise.race para timeout mais compatível - timeout aumentado para Vercel
+      const fetchPromise = fetch(apiUrl, {
         method: 'GET',
         cache: 'no-cache'
       });
       
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Health check timeout')), 10000);
+        setTimeout(() => reject(new Error('Health check timeout')), 15000); // Aumentado de 10s para 15s
       });
       
       const response = await Promise.race([fetchPromise, timeoutPromise]);

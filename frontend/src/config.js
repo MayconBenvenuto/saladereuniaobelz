@@ -1,7 +1,24 @@
 // Configurações da aplicação
+
+// Determinar a URL base da API
+const getApiBaseUrl = () => {
+  if (process.env.NODE_ENV === 'production') {
+    // Em produção, usa o mesmo domínio onde o frontend está hospedado
+    if (typeof window !== 'undefined') {
+      return window.location.origin;
+    }
+    return '';
+  } else {
+    // Em desenvolvimento
+    return 'http://localhost:3001';
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
 export const config = {
   // URLs da API
-  API_BASE_URL: process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3001',
+  API_BASE_URL,
   
   // Timeouts mais generosos
   API_TIMEOUT: 15000, // 15 segundos
@@ -32,3 +49,10 @@ export const logError = (...args) => {
 export const logWarn = (...args) => {
   console.warn('[WARN]', ...args);
 };
+
+// Log da configuração atual
+if (typeof window !== 'undefined') {
+  console.log('[CONFIG] Environment:', process.env.NODE_ENV);
+  console.log('[CONFIG] API Base URL:', config.API_BASE_URL);
+  console.log('[CONFIG] Current Origin:', window.location.origin);
+}

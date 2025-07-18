@@ -5,10 +5,10 @@
   "main": "api/vercel.js",
   "scripts": {
     "start": "node api/index.js",
-    "build": "npm install && cd frontend && npm install && npm run build",
-    "dev": "concurrently \"npm start\" \"cd frontend && npm start\"",
-    "install-all": "npm install && cd frontend && npm install",
-    "vercel-build": "echo 'Installing root dependencies...' && npm install && echo 'Installing frontend dependencies...' && cd frontend && npm install && echo 'Building frontend...' && npm run build",
+    "build": "npm install; cd frontend; npm install; npm run build",
+    "dev": "concurrently \"npm start\" \"cd frontend; npm start\"",
+    "install-all": "npm install; cd frontend; npm install",
+    "vercel-build": "npm install; cd frontend; npm install; npm run build",
     "test-connection": "node test-connection-fix.js"
   },
   "dependencies": {
