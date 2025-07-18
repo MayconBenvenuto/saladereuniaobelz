@@ -20,17 +20,17 @@ export const config = {
   // URLs da API
   API_BASE_URL,
   
-  // Timeouts mais generosos
-  API_TIMEOUT: 15000, // 15 segundos
-  API_RETRY_TIMEOUT: 20000, // 20 segundos no retry
+  // Timeouts otimizados para produção
+  API_TIMEOUT: 20000, // 20 segundos inicial
+  API_RETRY_TIMEOUT: 25000, // 25 segundos no retry
   
   // Cache
   CACHE_DURATION: 5 * 60 * 1000, // 5 minutos
   CACHE_DURATION_OFFLINE: 30 * 60 * 1000, // 30 minutos quando offline
   
-  // Retry com menos tentativas mas delay maior
+  // Retry com configuração mais robusta
   MAX_RETRIES: 3,
-  RETRY_DELAY: 1000, // 1s base delay
+  RETRY_DELAY: 1500, // 1.5s base delay
   
   // Logs
   DEBUG: process.env.NODE_ENV === 'development'

@@ -46,7 +46,7 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use(bodyParser.json());
 
-// Inicialização do cliente Supabase
+// Inicialização do cliente Supabase com configurações otimizadas
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
@@ -56,15 +56,29 @@ let supabase = null;
 function initializeSupabase() {
   try {
     if (!supabaseUrl || !supabaseKey) {
-      console.log('AVISO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas - rodando sem banco');
+      console.log('⚠️ AVISO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas - rodando sem banco');
       return null;
     }
     
-    supabase = createClient(supabaseUrl, supabaseKey);
-    console.log('Supabase inicializado com sucesso');
+    // Configurações otimizadas do cliente Supabase
+    const supabaseOptions = {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      },
+      global: {
+        headers: {
+          'x-application-name': 'saladereuniaobelz'
+        }
+      }
+    };
+    
+    supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
+    console.log('✅ Supabase inicializado com sucesso');
     return supabase;
   } catch (error) {
-    console.error('Erro ao inicializar Supabase:', error);
+    console.error('❌ Erro ao inicializar Supabase:', error);
     return null;
   }
 }
@@ -125,6 +139,7 @@ app.get('/api/test', (req, res) => {
 
 // Buscar agendamentos por data (query parameter)
 app.get('/api/appointments', async (req, res) => {
+  const startTime = Date.now();
   const { date } = req.query;
 
   // Validação do parâmetro de entrada
@@ -132,12 +147,12 @@ app.get('/api/appointments', async (req, res) => {
     return res.status(400).json({ error: 'Parâmetro de data (date) é obrigatório.' });
   }
 
-  console.log('Buscando agendamentos para a data:', date);
+  console.log(`📅 [${new Date().toISOString()}] Buscando agendamentos para: ${date}`);
 
   try {
     // Se o Supabase não estiver configurado, retornar dados de exemplo
     if (!supabase) {
-      console.log('Supabase não configurado, retornando dados de exemplo');
+      console.log('⚠️ Supabase não configurado, retornando dados de exemplo');
       const exampleAppointments = [
         {
           id: 1,
@@ -152,35 +167,41 @@ app.get('/api/appointments', async (req, res) => {
       return res.json(exampleAppointments);
     }
 
-    const { data, error } = await supabase
-      .from('agendamentos')
-      .select('*')
-      .eq('date', date)
-      .order('start_time', { ascending: true });
+    // Query otimizada com timeout
+    const { data, error } = await Promise.race([
+      supabase
+        .from('agendamentos')
+        .select('*')
+        .eq('date', date)
+        .order('start_time', { ascending: true }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout na consulta Supabase')), 15000)
+      )
+    ]);
 
     if (error) {
-      console.error('Erro ao buscar agendamentos:', error.message);
+      console.error('❌ Erro ao buscar agendamentos:', error.message);
       return res.status(500).json({ error: error.message });
     }
 
-    console.log('Agendamentos encontrados:', data);
-    res.json(data);
+    console.log(`✅ Agendamentos encontrados: ${data?.length || 0} em ${Date.now() - startTime}ms`);
+    res.json(data || []);
   } catch (err) {
-    console.error('Erro interno:', err);
+    console.error('❌ Erro interno:', err.message);
     res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 
 // Rota de disponibilidade otimizada - retorna apenas agendamentos ocupados
 app.get('/api/availability/:date', async (req, res) => {
+  const startTime = Date.now();
   const { date } = req.params;
   
-  console.log('=== OPTIMIZED AVAILABILITY ROUTE ===');
-  console.log('Date:', date);
+  console.log(`📅 [${new Date().toISOString()}] Buscando disponibilidade para: ${date}`);
   
-  // Timeout aumentado para conexões móveis
-  req.setTimeout(30000); // 30 segundos
-  res.setTimeout(30000); // 30 segundos
+  // Configurar timeout da requisição para 20 segundos
+  req.setTimeout(20000);
+  res.setTimeout(20000);
   
   if (!date) {
     return res.status(400).json({ error: 'Parâmetro de data é obrigatório.' });
@@ -192,7 +213,9 @@ app.get('/api/availability/:date', async (req, res) => {
     // Buscar apenas agendamentos ocupados (payload menor)
     if (supabase && process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
       try {
-        // Timeout aumentado para 15 segundos
+        console.log(`🔍 Consultando Supabase para data: ${date}`);
+        
+        // Query otimizada com timeout de 15 segundos
         const supabasePromise = supabase
           .from('agendamentos')
           .select('id, name, title, start_time, end_time')
@@ -200,7 +223,7 @@ app.get('/api/availability/:date', async (req, res) => {
           .order('start_time', { ascending: true });
 
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Timeout na consulta Supabase')), 15000); // 15 segundos
+          setTimeout(() => reject(new Error('Timeout na consulta Supabase')), 15000);
         });
 
         const result = await Promise.race([
@@ -209,12 +232,15 @@ app.get('/api/availability/:date', async (req, res) => {
         ]);
 
         if (result && result.error) {
-          console.warn('Supabase error:', result.error.message);
+          console.error('❌ Erro Supabase:', result.error.message);
+          appointments = []; // Fallback para array vazio
         } else if (result && result.data) {
           appointments = result.data || [];
+          console.log(`✅ Encontrados ${appointments.length} agendamentos em ${Date.now() - startTime}ms`);
         }
       } catch (supabaseErr) {
-        console.warn('Erro ao consultar Supabase:', supabaseErr.message);
+        console.error('❌ Erro na consulta Supabase:', supabaseErr.message);
+        appointments = []; // Fallback para array vazio
       }
     } else {
       console.log('Supabase não configurado, retornando dados de exemplo');
