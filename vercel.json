@@ -9,36 +9,14 @@
       }
     },
     {
-      "src": "api/vercel-simple.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 30
-      }
-    },
-    {
-      "src": "api/test-direct.js",
-      "use": "@vercel/node",
-      "config": {
-        "maxDuration": 30
-      }
+      "src": "api/minimal.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/test-direct(.*)",
-      "dest": "/api/test-direct.js"
-    },
-    {
       "src": "/api/(.*)",
-      "dest": "/api/vercel-simple.js"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "/frontend/build/static/$1"
-    },
-    {
-      "src": "/logo-belz.png",
-      "dest": "/frontend/build/logo-belz.png"
+      "dest": "/api/minimal.js"
     },
     {
       "src": "/(.*)",
