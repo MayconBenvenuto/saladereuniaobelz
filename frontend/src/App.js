@@ -67,8 +67,8 @@ const App = () => {
 
   // Preload das imagens importantes
   const imagesToPreload = useMemo(() => [
-    'logo-belz.png',
-    'sala.jpg',
+    '/logo-belz.png',
+    '/sala.jpg',
     'https://images.unsplash.com/photo-1517502884422-41eaead166d4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwyfHxjb25mZXJlbmNlJTIwcm9vbXxlbnwwfHx8fDE3NTI1MTU3NjZ8MA&ixlib=rb-4.1.0&q=85&w=400'
   ], []);
   
@@ -427,7 +427,7 @@ const App = () => {
         <div className="header-content">
           <div className="logo-container">
             <OptimizedImage 
-              src="logo-belz.png"
+              src="/logo-belz.png"
               alt="Belz Corretora de Seguros"
               className="logo"
               loading="eager"
@@ -436,7 +436,7 @@ const App = () => {
           </div>
           <div className="room-image-container">
             <OptimizedImage 
-              src="sala.jpg"
+              src="/sala.jpg"
               alt="Sala de Reunião"
               className="room-image"
               loading="lazy"
