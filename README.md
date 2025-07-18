@@ -1,200 +1,175 @@
-# Sistema de Agendamento de Sala de Reunião - Belz Corretora de Seguros
+# 📅 Sistema de Agendamento de Sala de Reunião - Belz Corretora
 
-Sistema completo para agendamento da sala de reunião da Belz Corretora de Seguros, desenvolvido com React.js e Express.js, usando Supabase como banco de dados.
+Sistema web moderno para agendamento de sala de reunião, desenvolvido com React e Node.js, integrado ao Supabase.
 
 ## 🚀 Funcionalidades
 
-- ✅ Visualização de disponibilidade por data
-- ✅ Agendamento de reuniões com validação de conflitos
-- ✅ Interface responsiva e moderna
-- ✅ Integração completa com Supabase
-- ✅ Deploy automático na Vercel
+- **Visualização de horários** - Grade visual de 30 em 30 minutos (8h às 18h)
+- **Agendamento intuitivo** - Clique no horário desejado para agendar
+- **Detecção de conflitos** - Impede agendamentos sobrepostos
+- **Interface responsiva** - Funciona em desktop, tablet e mobile
+- **Navegação de datas** - Visualize disponibilidade de diferentes dias
+- **Integração em tempo real** - Dados sincronizados com Supabase
 
-## 🏗️ Estrutura do Projeto
-
-```
-├── api/                 # Backend Express.js
-│   ├── index.js        # Servidor principal
-│   ├── vercel.js       # Adaptador para Vercel
-│   └── .env            # Variáveis de ambiente
-├── frontend/           # Frontend React
-│   ├── src/
-│   │   ├── App.js      # Componente principal
-│   │   └── ...
-│   └── package.json
-├── vercel.json         # Configuração de deploy
-└── package.json        # Dependências do projeto
-```
-
-## 🛠️ Tecnologias Utilizadas
+## 🛠️ Tecnologias
 
 ### Frontend
-- React 19
-- Tailwind CSS
-- Axios para requisições HTTP
-- CRACO para configuração personalizada
+- **React 19** - Interface de usuário
+- **Tailwind CSS** - Estilização moderna
+- **Axios** - Requisições HTTP
+- **Craco** - Configuração personalizada
 
 ### Backend
-- Node.js
-- Express.js
-- Supabase (PostgreSQL)
-- CORS para comunicação cross-origin
+- **Node.js** - Servidor
+- **Express** - Framework web
+- **Supabase** - Banco de dados e autenticação
+- **CORS** - Compartilhamento de recursos
 
 ### Deploy
-- Vercel (Frontend + Serverless Functions)
+- **Vercel** - Hospedagem e deploy automático
+- **Serverless Functions** - API escalável
 
-## 🔧 Configuração Local
+## 📋 Pré-requisitos
 
-### 1. Clone o repositório
+- Node.js 18+ 
+- Conta no Supabase
+- Conta na Vercel (opcional, para deploy)
+
+## ⚙️ Configuração
+
+### 1. Instalação
 ```bash
-git clone <url-do-repositorio>
-cd saladereuniaobelz
+# Instalar dependências do projeto
+npm run install-all
 ```
 
-### 2. Instale as dependências
-```bash
-# Dependências do backend
-npm install
-
-# Dependências do frontend
-cd frontend
-npm install
-cd ..
-```
-
-### 3. Configure as variáveis de ambiente
-
-Crie um arquivo `.env` na pasta `api/` com:
-```
-SUPABASE_URL=sua_url_do_supabase
-SUPABASE_KEY=sua_chave_publica_do_supabase
-PORT=3001
-```
-
-Crie um arquivo `.env.local` na pasta `frontend/` com:
-```
-REACT_APP_SUPABASE_URL=sua_url_do_supabase
-REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sua_chave_publica_do_supabase
-```
-
-### 4. Configure o banco de dados Supabase
-
-Crie uma tabela `appointments` no Supabase com a seguinte estrutura:
+### 2. Configuração do Banco de Dados
+Execute o SQL do arquivo `create-table.sql` no seu projeto Supabase:
 
 ```sql
+-- Criar tabela de agendamentos
 CREATE TABLE appointments (
-  id SERIAL PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
+  id BIGSERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
   description TEXT,
-  name VARCHAR(255) NOT NULL,
+  name TEXT NOT NULL,
   date DATE NOT NULL,
   start_time TIME NOT NULL,
   end_time TIME NOT NULL,
   participants TEXT,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Habilitar Row Level Security
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+
+-- Política para permitir todas as operações (desenvolvimento)
+CREATE POLICY "Enable all operations for appointments" ON appointments
+FOR ALL USING (true);
 ```
 
-### 5. Execute o projeto localmente
+### 3. Variáveis de Ambiente
+Crie um arquivo `.env` na raiz do projeto:
 
+```env
+# Configurações do Supabase
+SUPABASE_URL=sua_url_do_supabase
+SUPABASE_KEY=sua_chave_anon_do_supabase
+
+# Configurações do servidor
+PORT=3001
+NODE_ENV=development
+
+# Frontend
+REACT_APP_SUPABASE_URL=sua_url_do_supabase
+REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY=sua_chave_anon_do_supabase
+```
+
+> ⚠️ **Importante**: Nunca commite o arquivo `.env` no Git. Use apenas a chave **anon (public)** do Supabase.
+
+## 🚦 Como Executar
+
+### Desenvolvimento Local
 ```bash
-# Terminal 1 - Backend
-cd api
-node index.js
+# Iniciar backend e frontend simultaneamente
+npm run dev
 
-# Terminal 2 - Frontend
-cd frontend
-npm start
+# Ou iniciar separadamente:
+npm start              # Backend (porta 3001)
+cd frontend && npm start  # Frontend (porta 3000)
 ```
 
-Ou use o script PowerShell:
-```powershell
-.\start-all.ps1
+### Build de Produção
+```bash
+npm run build
 ```
 
-## 🚀 Deploy na Vercel
-
-### 1. Conecte seu repositório à Vercel
-
-### 2. Configure as variáveis de ambiente na Vercel:
-- `SUPABASE_URL`
-- `SUPABASE_KEY`
-- `REACT_APP_SUPABASE_URL`
-- `REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
-
-### 3. O deploy será automático a cada push
-
-## 📋 Estrutura da API
-
-### Endpoints Disponíveis
-
-#### `GET /api/appointments?date=YYYY-MM-DD`
-Busca agendamentos por data.
-
-#### `GET /api/availability/:date`
-Retorna disponibilidade de horários para uma data específica.
-
-#### `POST /api/appointments`
-Cria um novo agendamento.
-```json
-{
-  "title": "Reunião de Vendas",
-  "description": "Descrição da reunião",
-  "name": "Nome do Responsável",
-  "date": "2025-01-20",
-  "start_time": "09:00",
-  "end_time": "10:00",
-  "participants": "Lista de participantes"
-}
+### Testes
+```bash
+npm run test-connection
 ```
 
-#### `DELETE /api/appointments/:id`
-Remove um agendamento.
+## 📁 Estrutura do Projeto
 
-## 🎨 Interface
+```
+saladereuniaobelz/
+├── api/                 # Backend Node.js
+│   ├── index.js         # Servidor principal
+│   └── vercel.js        # Adaptador Vercel
+├── frontend/            # Frontend React
+│   ├── src/
+│   │   ├── App.js       # Componente principal
+│   │   ├── config.js    # Configurações
+│   │   └── useApi.js    # Hook personalizado para API
+│   └── build/           # Build de produção
+├── create-table.sql     # Script SQL da tabela
+├── package.json         # Dependências principais
+├── vercel.json         # Configuração Vercel
+└── .env                # Variáveis de ambiente (não versionado)
+```
 
-A interface foi desenvolvida com design moderno e responsivo, incluindo:
-- Logo da empresa Belz Corretora de Seguros
-- Imagem da sala de reunião
-- Navegação por datas
-- Grade de horários disponíveis/ocupados
-- Modal para agendamento
-- Botão flutuante para nova reunião
+## 🌐 Deploy
 
-## 🔒 Segurança
+### Vercel (Recomendado)
+1. Conecte seu repositório GitHub à Vercel
+2. Configure as variáveis de ambiente no dashboard da Vercel
+3. Deploy automático a cada push na branch main
 
-- Validação de conflitos de horários
-- Sanitização de dados de entrada
-- Uso de variáveis de ambiente para credenciais
-- CORS configurado adequadamente
+### Variáveis de Ambiente na Vercel
+```
+SUPABASE_URL=sua_url_do_supabase
+SUPABASE_KEY=sua_chave_anon_do_supabase
+```
 
-## 📱 Responsividade
+## 📱 Como Usar
 
-A aplicação é totalmente responsiva e funciona perfeitamente em:
-- Desktop
-- Tablets
-- Smartphones
+1. **Selecionar Data**: Use as setas para navegar entre os dias
+2. **Visualizar Disponibilidade**: 
+   - ✅ Verde = Horário livre
+   - 🔴 Vermelho = Horário ocupado
+3. **Fazer Agendamento**: Clique em um horário livre e preencha o formulário
+4. **Confirmar**: O sistema verifica conflitos automaticamente
 
-## 🐛 Solução de Problemas
+## 🔧 Scripts Disponíveis
 
-### Erro 404 na Vercel
-Certifique-se de que:
-1. As variáveis de ambiente estão configuradas
-2. O `vercel.json` está correto
-3. O build do frontend está sendo gerado corretamente
+- `npm start` - Inicia o backend
+- `npm run dev` - Inicia backend + frontend
+- `npm run build` - Build de produção
+- `npm run install-all` - Instala todas as dependências
+- `npm run test-connection` - Testa conexão com Supabase
 
-### Problemas de CORS
-Verifique se o CORS está habilitado no backend e se as origens estão corretas.
+## 📄 Licença
 
-### Problemas de conexão com Supabase
-1. Verifique se as credenciais estão corretas
-2. Confirme se a tabela `appointments` existe
-3. Verifique as políticas de segurança (RLS) no Supabase
+Este projeto é propriedade da **Belz Corretora de Seguros**.
 
-## 📞 Suporte
+## 🤝 Contribuição
 
-Para dúvidas ou problemas, entre em contato com a equipe de desenvolvimento.
+Para contribuir com o projeto:
+1. Faça um fork do repositório
+2. Crie uma branch para sua feature
+3. Faça commit das suas alterações
+4. Abra um Pull Request
 
 ---
 
-Desenvolvido para **Belz Corretora de Seguros** 🏢
+**Desenvolvido com ❤️ para Belz Corretora de Seguros**
