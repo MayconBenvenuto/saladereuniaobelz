@@ -40,11 +40,17 @@ class ConnectionMonitor {
 
   async healthCheck() {
     try {
-      const response = await fetch(`${config.API_BASE_URL}/api/health`, {
+      // Usar Promise.race para timeout mais compatível
+      const fetchPromise = fetch(`${config.API_BASE_URL}/api/health`, {
         method: 'GET',
-        cache: 'no-cache',
-        signal: AbortSignal.timeout(5000)
+        cache: 'no-cache'
       });
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Health check timeout')), 10000);
+      });
+      
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
       
       if (response.ok) {
         if (!this.isOnline) {

@@ -50,6 +50,7 @@ const App = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [bookingForm, setBookingForm] = useState({
     name: '',
     title: '',
@@ -138,6 +139,12 @@ const App = () => {
 
   // Load availability otimizado com cache e retry
   const loadAvailability = useCallback(async () => {
+    // Evitar múltiplas requisições simultâneas
+    if (isLoadingData) {
+      logDebug('Requisição já em andamento, ignorando...');
+      return;
+    }
+    
     const dateStr = formatDateForAPI(selectedDate);
     
     // Verificar cache primeiro
@@ -147,6 +154,8 @@ const App = () => {
       logDebug('Dados carregados do cache para:', dateStr);
       return;
     }
+    
+    setIsLoadingData(true);
     
     try {
       logDebug(`Carregando disponibilidade para: ${dateStr}`);
@@ -180,14 +189,31 @@ const App = () => {
         }
       } else {
         setOccupiedSlots([]);
-        if (error.includes('timeout') || error.includes('Timeout')) {
-          showError('Timeout na conexão. Tente novamente.');
+        const errorMessage = error?.message || String(error);
+        if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+          showError('Conexão lenta. Tentando novamente...');
+          // Tentar novamente após um delay
+          setTimeout(() => {
+            setIsLoadingData(false);
+            loadAvailability();
+          }, 3000);
+          return; // Não resetar isLoadingData aqui
+        } else if (errorMessage.includes('AbortError') || errorMessage.includes('signal is aborted')) {
+          showError('Requisição cancelada. Tentando novamente...');
+          // Tentar novamente após um delay
+          setTimeout(() => {
+            setIsLoadingData(false);
+            loadAvailability();
+          }, 2000);
+          return; // Não resetar isLoadingData aqui
         } else {
-          showError('Erro de conexão. Tente novamente.');
+          showError('Erro de conexão. Verifique sua internet.');
         }
       }
+    } finally {
+      setIsLoadingData(false);
     }
-  }, [selectedDate, request]);
+  }, [selectedDate, request, isLoadingData]);
 
   // Load availability when date changes
   useEffect(() => {
@@ -314,12 +340,23 @@ const App = () => {
       setTimeout(() => loadAvailability(), 500);
       
     } catch (error) {
-      if (error.includes('timeout') || error.includes('Timeout')) {
-        showError('Timeout no agendamento. Verifique sua conexão e tente novamente.');
-      } else if (error.includes('409') || error.includes('ocupado')) {
+      logError('Erro ao criar agendamento:', error);
+      const errorMessage = error?.message || String(error);
+      
+      if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+        showError('Conexão lenta. Tentando novamente em alguns segundos...');
+      } else if (errorMessage.includes('AbortError') || errorMessage.includes('signal is aborted')) {
+        showError('Requisição cancelada. Tente novamente.');
+      } else if (errorMessage.includes('409') || errorMessage.includes('ocupado')) {
         showError('Horário já foi ocupado por outro usuário. Escolha outro horário.');
+        // Recarregar disponibilidade para mostrar horários atualizados
+        loadAvailability();
+      } else if (errorMessage.includes('400')) {
+        showError('Dados inválidos. Verifique as informações e tente novamente.');
+      } else if (errorMessage.includes('500')) {
+        showError('Erro no servidor. Tente novamente em alguns minutos.');
       } else {
-        showError(error || 'Erro ao agendar reunião. Tente novamente.');
+        showError('Erro ao agendar reunião. Verifique sua conexão e tente novamente.');
       }
     }
   }, [bookingForm, selectedDate, loadAvailability, request]);

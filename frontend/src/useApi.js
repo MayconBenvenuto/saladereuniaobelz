@@ -44,16 +44,14 @@ export const useApi = () => {
     
     for (let i = 0; i < maxRetries; i++) {
       try {
-        // Timeout progressivo
-        const timeout = config.API_TIMEOUT + (i * (config.API_RETRY_TIMEOUT - config.API_TIMEOUT));
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        // Timeout progressivo mais generoso
+        const timeout = config.API_TIMEOUT + (i * 5000); // Aumenta 5s a cada tentativa
         
-        logDebug(`Fazendo requisição para: ${url} (tentativa ${i + 1}/${maxRetries})`);
+        logDebug(`Fazendo requisição para: ${url} (tentativa ${i + 1}/${maxRetries}) - timeout: ${timeout}ms`);
         
-        const response = await fetch(url, {
+        // Usar Promise.race para implementar timeout de forma mais compatível
+        const fetchPromise = fetch(url, {
           ...options,
-          signal: controller.signal,
           mode: 'cors',
           credentials: 'include',
           headers: {
@@ -63,7 +61,11 @@ export const useApi = () => {
           }
         });
         
-        clearTimeout(timeoutId);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout de ${timeout}ms excedido`)), timeout);
+        });
+        
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
         
         if (response.ok) {
           logDebug(`Sucesso na requisição para: ${url}`);
@@ -82,15 +84,16 @@ export const useApi = () => {
       } catch (error) {
         lastError = error;
         
-        if (error.name === 'AbortError') {
-          logWarn(`Tentativa ${i + 1}/${maxRetries} - Timeout após ${config.API_TIMEOUT + (i * (config.API_RETRY_TIMEOUT - config.API_TIMEOUT))}ms`);
+        if (error.message.includes('Timeout')) {
+          logWarn(`Tentativa ${i + 1}/${maxRetries} - ${error.message}`);
         } else {
           logWarn(`Tentativa ${i + 1}/${maxRetries} - ${error.message}`);
         }
         
         // Se não for a última tentativa, aguarda antes de tentar novamente
         if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, config.RETRY_DELAY * (i + 1)));
+          const delay = config.RETRY_DELAY * Math.pow(2, i); // Backoff exponencial
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
