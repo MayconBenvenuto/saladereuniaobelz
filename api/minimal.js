@@ -3,7 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Cache simples em memória para reduzir consultas desnecessárias
 const cache = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+const CACHE_TTL = 2 * 60 * 1000; // Reduzido para 2 minutos
 
 // Função para cache com TTL
 function getCached(key) {
@@ -346,16 +346,23 @@ module.exports = async (req, res) => {
           const duration = Date.now() - startTime;
           const created = data[0];
           
-          // Invalidar cache para esta data
-          cache.delete(`appointments:${date}`);
-          cache.delete(`availability:${date}`);
+          // Invalidar TODO o cache para garantir consistência
+          console.log(`🧹 [${requestId}] Limpando cache completo após inserção`);
+          cache.clear();
           
           console.log(`✅ [${requestId}] Agendamento criado em ${duration}ms: ID ${created.id}`);
+          
+          // Headers para evitar cache após modificação
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          
           res.status(201).json({
             message: 'Agendamento criado com sucesso',
             appointment: created,
             requestId,
-            duration
+            duration,
+            cache_cleared: true
           });
           
         } catch (parseError) {

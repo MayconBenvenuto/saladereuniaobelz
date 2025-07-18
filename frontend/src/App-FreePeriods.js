@@ -47,13 +47,22 @@ const minutesToTime = (minutes) => {
 
 // Função para converter hora em minutos desde o início do dia
 const timeToMinutes = (timeString) => {
-  const [hours, minutes] = timeString.split(':').map(Number);
+  if (!timeString) return 0;
+  
+  // Suporta tanto HH:MM quanto HH:MM:SS
+  const timeParts = timeString.split(':');
+  const hours = parseInt(timeParts[0]) || 0;
+  const minutes = parseInt(timeParts[1]) || 0;
+  // Ignora segundos se existir
+  
   return hours * 60 + minutes;
 };
 
 // Função para gerar períodos de 30 minutos (como antes) mas com lógica flexível
 const generateTimeSlots = (appointments, startHour = 8, endHour = 18, slotDuration = 30) => {
   const slots = [];
+  
+  console.log('[DEBUG] Gerando slots com agendamentos:', appointments);
   
   for (let hour = startHour; hour < endHour; hour++) {
     for (let min = 0; min < 60; min += slotDuration) {
@@ -76,11 +85,19 @@ const generateTimeSlots = (appointments, startHour = 8, endHour = 18, slotDurati
         const apptStart = timeToMinutes(appt.start_time);
         const apptEnd = timeToMinutes(appt.end_time);
         
-        return (
+        console.log(`[DEBUG] Comparando slot ${start}-${end} (${slotStart}-${slotEnd}) com agendamento ${appt.start_time}-${appt.end_time} (${apptStart}-${apptEnd})`);
+        
+        const hasConflict = (
           (slotStart >= apptStart && slotStart < apptEnd) ||
           (slotEnd > apptStart && slotEnd <= apptEnd) ||
           (slotStart <= apptStart && slotEnd >= apptEnd)
         );
+        
+        if (hasConflict) {
+          console.log(`[DEBUG] ✅ Conflito encontrado: slot ${start}-${end} ocupado por "${appt.title}"`);
+        }
+        
+        return hasConflict;
       });
 
       slots.push({
@@ -92,6 +109,9 @@ const generateTimeSlots = (appointments, startHour = 8, endHour = 18, slotDurati
     }
   }
 
+  console.log('[DEBUG] Slots gerados:', slots.length, 'total');
+  console.log('[DEBUG] Slots ocupados:', slots.filter(s => !s.available).length);
+  
   return slots;
 };
 
@@ -331,6 +351,7 @@ const AppFreePeriods = () => {
       logDebug(`Dados recebidos para ${dateStr}:`, data);
       
       const appointmentsList = Array.isArray(data) ? data : [];
+      console.log('[DEBUG] Appointments processados:', appointmentsList);
       setAppointments(appointmentsList);
       
       // Salvar no cache
@@ -397,11 +418,32 @@ const AppFreePeriods = () => {
       setShowBookingModal(false);
       setSelectedSlot(null);
       
-      // Recarregar agendamentos
-      await loadAppointments();
+      // Limpar cache ANTES de recarregar
+      const dateStr = formatDateForAPI(selectedDate);
+      localStorage.removeItem(`${CACHE_KEY}_${dateStr}`);
       
-      // Limpar cache para forçar atualização
-      localStorage.removeItem(`${CACHE_KEY}_${formatDateForAPI(selectedDate)}`);
+      // Forçar reload completo dos agendamentos com cache busting
+      console.log('[DEBUG] Recarregando agendamentos após criação...');
+      
+      // Fazer requisição direta sem cache para garantir dados atualizados
+      try {
+        const cacheBuster = Date.now();
+        const freshData = await request(`${config.API_BASE_URL}/api/appointments?date=${dateStr}&_cb=${cacheBuster}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        console.log('[DEBUG] Dados frescos recebidos:', freshData);
+        const appointmentsList = Array.isArray(freshData) ? freshData : [];
+        setAppointments(appointmentsList);
+        
+      } catch (reloadError) {
+        console.error('[DEBUG] Erro ao recarregar, tentando método normal:', reloadError);
+        await loadAppointments();
+      }
       
     } catch (error) {
       logError('Erro ao criar agendamento:', error);
