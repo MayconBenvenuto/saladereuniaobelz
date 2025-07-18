@@ -4,19 +4,23 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 
-console.log('=== BACKEND STARTING ===');
+console.log('🚀 BACKEND INICIANDO...');
+console.log('📅 Timestamp:', new Date().toISOString());
+console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
+console.log('📦 VERCEL:', !!process.env.VERCEL);
 
 // Carregamento mais robusto das variáveis de ambiente
 if (process.env.NODE_ENV !== 'production') {
   try {
     require('dotenv').config();
   } catch (error) {
-    console.warn('Dotenv não carregado:', error.message);
+    console.warn('⚠️ Dotenv não carregado:', error.message);
   }
 }
 
 // Inicializa o aplicativo Express
 const app = express();
+console.log('✅ Express app criado');
 
 // Configuração CORS simplificada para produção
 if (process.env.NODE_ENV === 'production') {
@@ -86,28 +90,41 @@ function initializeSupabase() {
 // Inicializar Supabase
 supabase = initializeSupabase();
 
-// Health check endpoint - MAIS RÁPIDO e sem dependências
-app.get('/api/health', (req, res) => {
-  console.log('Health check endpoint called');
-  res.status(200).json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    supabase: !!supabase,
-    environment: process.env.NODE_ENV || 'unknown',
-    vercel: !!process.env.VERCEL,
-    hasSupabaseUrl: !!process.env.SUPABASE_URL,
-    hasSupabaseKey: !!process.env.SUPABASE_KEY
-  });
-});
-
 // Endpoint super simples para teste de conectividade - SEM DEPENDÊNCIAS
 app.get('/api/ping', (req, res) => {
   try {
-    console.log('Ping endpoint called');
-    res.status(200).send('pong');
+    console.log('🏓 Ping endpoint chamado');
+    const response = {
+      status: 'pong',
+      timestamp: new Date().toISOString(),
+      message: 'API funcionando!'
+    };
+    console.log('✅ Ping response:', response);
+    res.status(200).json(response);
   } catch (error) {
-    console.error('Erro no ping:', error);
-    res.status(500).send('erro');
+    console.error('❌ Erro no ping:', error);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// Health check endpoint - MAIS RÁPIDO e sem dependências
+app.get('/api/health', (req, res) => {
+  try {
+    console.log('🏥 Health check endpoint chamado');
+    const response = { 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      supabase: !!supabase,
+      environment: process.env.NODE_ENV || 'unknown',
+      vercel: !!process.env.VERCEL,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      hasSupabaseKey: !!process.env.SUPABASE_KEY
+    };
+    console.log('✅ Health response:', response);
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('❌ Erro no health:', error);
+    res.status(500).json({ error: 'Erro interno' });
   }
 });
 // Todas as suas operações estão usando o cliente 'supabase-js'.
