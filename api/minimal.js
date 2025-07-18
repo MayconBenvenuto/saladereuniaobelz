@@ -92,6 +92,133 @@ module.exports = async (req, res) => {
       return;
     }
     
+    // Create appointment endpoint (POST)
+    if (path === '/api/appointments' && req.method === 'POST') {
+      if (!supabase) {
+        res.status(500).json({ error: 'Banco de dados não disponível' });
+        return;
+      }
+      
+      // Parse request body
+      let body = '';
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+      
+      req.on('end', async () => {
+        try {
+          const appointmentData = JSON.parse(body);
+          console.log(`📝 Criando agendamento:`, appointmentData);
+          
+          // Validar dados obrigatórios
+          const { name, title, date, start_time, end_time } = appointmentData;
+          
+          if (!name || !title || !date || !start_time || !end_time) {
+            res.status(400).json({ 
+              error: 'Dados obrigatórios: name, title, date, start_time, end_time' 
+            });
+            return;
+          }
+          
+          // Verificar conflitos antes de inserir
+          const { data: conflicts } = await Promise.race([
+            supabase
+              .from('agendamentos')
+              .select('id, name, start_time, end_time')
+              .eq('date', date)
+              .or(`and(start_time.lte.${start_time},end_time.gt.${start_time}),and(start_time.lt.${end_time},end_time.gte.${end_time}),and(start_time.gte.${start_time},end_time.lte.${end_time})`),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 15000)
+            )
+          ]);
+          
+          if (conflicts && conflicts.length > 0) {
+            console.log(`❌ Conflito encontrado:`, conflicts[0]);
+            res.status(409).json({ 
+              error: 'Horário já ocupado',
+              conflict: conflicts[0]
+            });
+            return;
+          }
+          
+          // Inserir o agendamento
+          const { data, error } = await Promise.race([
+            supabase
+              .from('agendamentos')
+              .insert([appointmentData])
+              .select(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 15000)
+            )
+          ]);
+          
+          if (error) {
+            console.error(`❌ Erro ao inserir:`, error);
+            res.status(500).json({ error: error.message });
+            return;
+          }
+          
+          console.log(`✅ Agendamento criado em ${Date.now() - startTime}ms:`, data[0]);
+          res.status(201).json({
+            message: 'Agendamento criado com sucesso',
+            appointment: data[0]
+          });
+          
+        } catch (parseError) {
+          console.error(`❌ Erro ao processar dados:`, parseError);
+          res.status(400).json({ error: 'Dados inválidos' });
+        }
+      });
+      
+      return;
+    }
+    
+    // Delete appointment endpoint (DELETE)
+    if (path.startsWith('/api/appointments/') && req.method === 'DELETE') {
+      if (!supabase) {
+        res.status(500).json({ error: 'Banco de dados não disponível' });
+        return;
+      }
+      
+      const appointmentId = path.split('/api/appointments/')[1];
+      
+      if (!appointmentId) {
+        res.status(400).json({ error: 'ID do agendamento é obrigatório' });
+        return;
+      }
+      
+      console.log(`🗑️ Deletando agendamento ID: ${appointmentId}`);
+      
+      const { data, error } = await Promise.race([
+        supabase
+          .from('agendamentos')
+          .delete()
+          .eq('id', appointmentId)
+          .select(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 15000)
+        )
+      ]);
+      
+      if (error) {
+        console.error(`❌ Erro ao deletar:`, error);
+        res.status(500).json({ error: error.message });
+        return;
+      }
+      
+      if (!data || data.length === 0) {
+        res.status(404).json({ error: 'Agendamento não encontrado' });
+        return;
+      }
+      
+      console.log(`✅ Agendamento deletado em ${Date.now() - startTime}ms`);
+      res.status(200).json({
+        message: 'Agendamento deletado com sucesso',
+        deleted: data[0]
+      });
+      return;
+    }
+    
     // Availability endpoint
     if (path.startsWith('/api/availability/') && req.method === 'GET') {
       const date = path.split('/api/availability/')[1];
@@ -148,6 +275,8 @@ module.exports = async (req, res) => {
         'GET /api/ping',
         'GET /api/health', 
         'GET /api/appointments?date=YYYY-MM-DD',
+        'POST /api/appointments',
+        'DELETE /api/appointments/:id',
         'GET /api/availability/YYYY-MM-DD'
       ]
     });
