@@ -4,8 +4,16 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
-// Importa e carrega as variáveis de ambiente de um arquivo .env
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+// Carregamento mais robusto das variáveis de ambiente
+try {
+  if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config({ path: path.join(__dirname, '../.env') });
+  }
+} catch (error) {
+  console.warn('Dotenv não carregado (normal em produção):', error.message);
+}
+
 console.log('Iniciando backend...');
 
 // Inicializa o aplicativo Express
@@ -52,9 +60,12 @@ app.use(bodyParser.json()); // Habilita o parsing de JSON no corpo das requisiç
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 
-console.log('Variáveis de ambiente:');
+console.log('=== VARIÁVEIS DE AMBIENTE DEBUG ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('VERCEL:', process.env.VERCEL);
 console.log('SUPABASE_URL:', supabaseUrl ? 'Configurada' : 'NÃO configurada');
 console.log('SUPABASE_KEY:', supabaseKey ? `Configurada (${supabaseKey.length} chars)` : 'NÃO configurada');
+console.log('SUPABASE_URL value:', supabaseUrl?.substring(0, 50) + '...');
 
 let supabase = null;
 
