@@ -52,30 +52,49 @@ const supabaseKey = process.env.SUPABASE_KEY;
 
 let supabase = null;
 
-// Verifica se as variáveis de ambiente do Supabase estão definidas
-if (!supabaseUrl || !supabaseKey) {
-  console.error('ERRO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas');
-} else {
-  supabase = createClient(supabaseUrl, supabaseKey);
-  console.log('Supabase inicializado');
+// Função para inicializar Supabase de forma segura
+function initializeSupabase() {
+  try {
+    if (!supabaseUrl || !supabaseKey) {
+      console.log('AVISO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas - rodando sem banco');
+      return null;
+    }
+    
+    supabase = createClient(supabaseUrl, supabaseKey);
+    console.log('Supabase inicializado com sucesso');
+    return supabase;
+  } catch (error) {
+    console.error('Erro ao inicializar Supabase:', error);
+    return null;
+  }
 }
 
-// Health check endpoint - MAIS RÁPIDO
+// Inicializar Supabase
+supabase = initializeSupabase();
+
+// Health check endpoint - MAIS RÁPIDO e sem dependências
 app.get('/api/health', (req, res) => {
   console.log('Health check endpoint called');
-  res.json({ 
+  res.status(200).json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     supabase: !!supabase,
-    environment: process.env.NODE_ENV,
-    vercel: !!process.env.VERCEL
+    environment: process.env.NODE_ENV || 'unknown',
+    vercel: !!process.env.VERCEL,
+    hasSupabaseUrl: !!process.env.SUPABASE_URL,
+    hasSupabaseKey: !!process.env.SUPABASE_KEY
   });
 });
 
-// Endpoint super simples para teste de conectividade
+// Endpoint super simples para teste de conectividade - SEM DEPENDÊNCIAS
 app.get('/api/ping', (req, res) => {
-  console.log('Ping endpoint called');
-  res.json({ pong: true, timestamp: new Date().toISOString() });
+  try {
+    console.log('Ping endpoint called');
+    res.status(200).send('pong');
+  } catch (error) {
+    console.error('Erro no ping:', error);
+    res.status(500).send('erro');
+  }
 });
 // Todas as suas operações estão usando o cliente 'supabase-js'.
 // Se você não pretende usar uma conexão PostgreSQL direta separada do Supabase client,
@@ -134,7 +153,7 @@ app.get('/api/appointments', async (req, res) => {
     }
 
     const { data, error } = await supabase
-      .from('appointments')
+      .from('agendamentos')
       .select('*')
       .eq('date', date)
       .order('start_time', { ascending: true });
@@ -175,7 +194,7 @@ app.get('/api/availability/:date', async (req, res) => {
       try {
         // Timeout aumentado para 15 segundos
         const supabasePromise = supabase
-          .from('appointments')
+          .from('agendamentos')
           .select('id, name, title, start_time, end_time')
           .eq('date', date)
           .order('start_time', { ascending: true });
@@ -397,7 +416,7 @@ async function createAppointmentTraditional(req, res, { title, description, name
     try {
       // Verificar conflito com timeout de 10 segundos
       const checkConflictPromise = supabase
-        .from('appointments')
+        .from('agendamentos')
         .select('id, start_time, end_time')
         .eq('date', date);
       
@@ -453,7 +472,7 @@ async function createAppointmentTraditional(req, res, { title, description, name
 
       // Criar agendamento com timeout de 15 segundos
       const createPromise = supabase
-        .from('appointments')
+        .from('agendamentos')
         .insert([{ title, description, name, date, start_time, end_time }])
         .select();
       
@@ -501,7 +520,7 @@ app.delete('/api/appointments/:id', async (req, res) => {
     console.log('Deletando agendamento com ID:', id);
     
     const { error } = await supabase
-      .from('appointments')
+      .from('agendamentos')
       .delete()
       .eq('id', id);
 
@@ -545,7 +564,7 @@ app.get('/api/occupied-slots/:date', async (req, res) => {
       });
       
       const queryPromise = supabase
-        .from('appointments')
+        .from('agendamentos')
         .select('id, name, title, start_time, end_time')
         .eq('date', date)
         .order('start_time', { ascending: true });
@@ -589,7 +608,7 @@ app.get('/api/check-availability/:date/:start_time/:end_time', async (req, res) 
     
     if (supabase) {
       const { data: conflicts } = await supabase
-        .from('appointments')
+        .from('agendamentos')
         .select('id')
         .eq('date', date)
         .or(`and(start_time.lte.${start_time},end_time.gt.${start_time}),and(start_time.lt.${end_time},end_time.gte.${end_time}),and(start_time.gte.${start_time},end_time.lte.${end_time})`)

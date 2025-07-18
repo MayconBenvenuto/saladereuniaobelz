@@ -73,11 +73,14 @@ class ConnectionMonitor {
   }
 
   startHealthCheck() {
-    setInterval(() => {
-      if (this.isOnline) {
-        this.healthCheck();
-      }
-    }, 30000); // Check a cada 30 segundos
+    // Temporariamente desabilitado para evitar timeout no Vercel
+    // setInterval(() => {
+    //   if (this.isOnline) {
+    //     this.healthCheck();
+    //   }
+    // }, 30000); // Check a cada 30 segundos
+    
+    console.log('[ConnectionMonitor] Health check automático desabilitado temporariamente');
   }
 
   async retryOperation(operation, maxRetries = this.maxRetries) {
