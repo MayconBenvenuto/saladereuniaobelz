@@ -21,17 +21,25 @@ app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 // Supabase
 let supabase = null;
-if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false
-    }
-  });
-  console.log('✅ Supabase inicializado');
+if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY && 
+    process.env.SUPABASE_URL !== 'coloque_sua_url_aqui' && 
+    process.env.SUPABASE_KEY !== 'coloque_sua_key_aqui') {
+  try {
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false
+      }
+    });
+    console.log('✅ Supabase inicializado');
+  } catch (error) {
+    console.warn('⚠️ Erro ao inicializar Supabase:', error.message);
+    supabase = null;
+  }
 } else {
-  console.warn('⚠️ Supabase não configurado - variáveis de ambiente ausentes');
+  console.warn('⚠️ Supabase não configurado - variáveis de ambiente ausentes ou inválidas');
+  console.log('💡 Para usar o Supabase, configure as variáveis SUPABASE_URL e SUPABASE_KEY no arquivo .env');
 }
 
 // Ping endpoint
@@ -83,21 +91,30 @@ app.get('/api/appointments', async (req, res) => {
 // Get availability for a date
 app.get('/api/availability/:date', async (req, res) => {
   const { date } = req.params;
+  const { sala } = req.query; // Adicionar parâmetro de sala
   
   if (!supabase) {
     // Return mock data if no database
     return res.json({
       date,
+      sala: sala || 'grande',
       occupied: [],
       available: ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
     });
   }
   
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('agendamentos')
       .select('start_time, end_time')
       .eq('date', date);
+    
+    // Filtrar por sala se especificado
+    if (sala) {
+      query = query.eq('sala', sala);
+    }
+    
+    const { data, error } = await query;
       
     if (error) throw error;
     
@@ -108,6 +125,7 @@ app.get('/api/availability/:date', async (req, res) => {
     
     res.json({
       date,
+      sala: sala || 'todas',
       occupied,
       available: generateAvailableSlots(occupied)
     });
@@ -118,9 +136,9 @@ app.get('/api/availability/:date', async (req, res) => {
 
 // Create appointment
 app.post('/api/appointments', async (req, res) => {
-  const { name, title, date, start_time, end_time, description } = req.body;
+  const { name, title, date, start_time, end_time, description, participants, sala } = req.body;
   
-  if (!name || !title || !date || !start_time || !end_time) {
+  if (!name || !title || !date || !start_time || !end_time || !sala) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
   
@@ -131,7 +149,7 @@ app.post('/api/appointments', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('agendamentos')
-      .insert([{ name, title, date, start_time, end_time, description }])
+      .insert([{ name, title, date, start_time, end_time, description, participants, sala }])
       .select();
       
     if (error) throw error;
@@ -165,7 +183,7 @@ app.delete('/api/appointments/:id', async (req, res) => {
 // Update appointment
 app.put('/api/appointments/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, title, date, start_time, end_time, description } = req.body;
+  const { name, title, date, start_time, end_time, description, participants, sala } = req.body;
   
   if (!supabase) {
     return res.status(503).json({ error: 'Database not configured' });
@@ -174,7 +192,7 @@ app.put('/api/appointments/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('agendamentos')
-      .update({ name, title, date, start_time, end_time, description })
+      .update({ name, title, date, start_time, end_time, description, participants, sala })
       .eq('id', id)
       .select();
       

@@ -116,11 +116,13 @@ const generateTimeSlots = (appointments, startHour = 8, endHour = 18, slotDurati
 };
 
 // Componente BookingModal com design original
-const BookingModal = ({ isOpen, onClose, selectedSlot, onConfirm }) => {
+const BookingModal = ({ isOpen, onClose, selectedSlot, onConfirm, preSelectedRoom = 'grande' }) => {
   const [form, setForm] = useState({
     name: '',
     title: '',
     participants: '',
+    description: '',
+    sala: preSelectedRoom,
     start_time: '',
     end_time: ''
   });
@@ -129,11 +131,12 @@ const BookingModal = ({ isOpen, onClose, selectedSlot, onConfirm }) => {
     if (selectedSlot && isOpen) {
       setForm(prev => ({
         ...prev,
+        sala: preSelectedRoom,
         start_time: selectedSlot.start_time,
         end_time: selectedSlot.end_time
       }));
     }
-  }, [selectedSlot, isOpen]);
+  }, [selectedSlot, isOpen, preSelectedRoom]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -159,6 +162,8 @@ const BookingModal = ({ isOpen, onClose, selectedSlot, onConfirm }) => {
       name: form.name.trim(),
       title: form.title.trim(),
       participants: form.participants.trim(),
+      description: form.description.trim(),
+      sala: form.sala,
       start_time: form.start_time,
       end_time: form.end_time
     });
@@ -221,6 +226,37 @@ const BookingModal = ({ isOpen, onClose, selectedSlot, onConfirm }) => {
               />
             </div>
 
+            <div className="form-group">
+              <label>Descrição da Reunião</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Descreva brevemente o assunto da reunião (opcional)"
+                rows="2"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Sala de Reunião *</label>
+              <select
+                value={form.sala}
+                onChange={(e) => setForm(prev => ({ ...prev, sala: e.target.value }))}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.8rem',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  backgroundColor: '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="grande">🏢 Sala de Reunião Grande</option>
+                <option value="pequena">🏠 Sala de Reunião Pequena</option>
+              </select>
+            </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label>Horário de Início *</label>
@@ -258,12 +294,184 @@ const BookingModal = ({ isOpen, onClose, selectedSlot, onConfirm }) => {
   );
 };
 
+// Componente EditModal para editar agendamentos
+const EditModal = ({ isOpen, onClose, appointment, onConfirm }) => {
+  const [form, setForm] = useState({
+    name: '',
+    title: '',
+    participants: '',
+    description: '',
+    sala: 'grande',
+    start_time: '',
+    end_time: ''
+  });
+
+  useEffect(() => {
+    if (appointment && isOpen) {
+      setForm({
+        name: appointment.name || '',
+        title: appointment.title || '',
+        participants: appointment.participants || '',
+        description: appointment.description || '',
+        sala: appointment.sala || 'grande',
+        start_time: appointment.start_time || '',
+        end_time: appointment.end_time || ''
+      });
+    }
+  }, [appointment, isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!form.name.trim()) {
+      alert('Nome é obrigatório');
+      return;
+    }
+    if (!form.title.trim()) {
+      alert('Título da reunião é obrigatório');
+      return;
+    }
+    if (!form.start_time || !form.end_time) {
+      alert('Horários são obrigatórios');
+      return;
+    }
+    if (form.start_time >= form.end_time) {
+      alert('Horário de fim deve ser posterior ao horário de início');
+      return;
+    }
+    
+    onConfirm({
+      name: form.name.trim(),
+      title: form.title.trim(),
+      participants: form.participants.trim(),
+      description: form.description.trim(),
+      sala: form.sala,
+      start_time: form.start_time,
+      end_time: form.end_time
+    });
+  };
+
+  if (!isOpen || !appointment) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <div className="modal-header">
+          <h3>Editar Agendamento</h3>
+          <button className="close-button" onClick={onClose}>×</button>
+        </div>
+        
+        <div className="booking-form">
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>Nome do Responsável *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                required
+                placeholder="Digite seu nome"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Título da Reunião *</label>
+              <input
+                type="text"
+                value={form.title}
+                onChange={(e) => setForm(prev => ({ ...prev, title: e.target.value }))}
+                required
+                placeholder="Ex: Reunião de Vendas"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Participantes</label>
+              <textarea
+                value={form.participants}
+                onChange={(e) => setForm(prev => ({ ...prev, participants: e.target.value }))}
+                placeholder="Lista de participantes (opcional)"
+                rows="3"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Descrição da Reunião</label>
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Descreva brevemente o assunto da reunião (opcional)"
+                rows="2"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Sala de Reunião *</label>
+              <select
+                value={form.sala}
+                onChange={(e) => setForm(prev => ({ ...prev, sala: e.target.value }))}
+                required
+                style={{
+                  width: '100%',
+                  padding: '0.8rem',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  backgroundColor: '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="grande">🏢 Sala de Reunião Grande</option>
+                <option value="pequena">🏠 Sala de Reunião Pequena</option>
+              </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Horário de Início *</label>
+                <input
+                  type="time"
+                  value={form.start_time}
+                  onChange={(e) => setForm(prev => ({ ...prev, start_time: e.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Horário de Término *</label>
+                <input
+                  type="time"
+                  value={form.end_time}
+                  onChange={(e) => setForm(prev => ({ ...prev, end_time: e.target.value }))}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button type="button" onClick={onClose} className="cancel-button">
+                Cancelar
+              </button>
+              <button type="submit" className="submit-button">
+                Salvar Alterações
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Componente principal
 const AppFreePeriods = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedRoom, setSelectedRoom] = useState('todas'); // Estado para sala selecionada
   const [appointments, setAppointments] = useState([]);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [editingAppointment, setEditingAppointment] = useState(null);
   const [success, setSuccess] = useState(null);
   const [slotsConfig, setSlotsConfig] = useState({
     start_hour: 8,
@@ -303,8 +511,13 @@ const AppFreePeriods = () => {
   // Gerar slots com a nova lógica flexível
   const timeSlots = useMemo(() => {
     const { start_hour, end_hour, slot_duration } = slotsConfig;
-    return generateTimeSlots(appointments, start_hour, end_hour, slot_duration);
-  }, [appointments, slotsConfig]);
+    // Filtrar agendamentos por sala se uma sala específica estiver selecionada
+    const filteredAppointments = selectedRoom === 'todas' 
+      ? appointments 
+      : appointments.filter(app => app.sala === selectedRoom);
+    
+    return generateTimeSlots(filteredAppointments, start_hour, end_hour, slot_duration);
+  }, [appointments, slotsConfig, selectedRoom]);
 
   // Carregar configuração de slots do backend
   const loadSlotsConfig = useCallback(async () => {
@@ -404,6 +617,8 @@ const AppFreePeriods = () => {
         name: formData.name,
         title: formData.title,
         participants: formData.participants,
+        description: formData.description,
+        sala: formData.sala,
         date: formatDateForAPI(selectedDate),
         start_time: formData.start_time,
         end_time: formData.end_time
@@ -453,6 +668,76 @@ const AppFreePeriods = () => {
     } catch (error) {
       logError('Erro ao criar agendamento:', error);
       showError('Erro ao criar agendamento. Tente novamente.');
+    }
+  };
+
+  // Editar agendamento
+  const handleEditAppointment = (appointment) => {
+    setEditingAppointment(appointment);
+    setSelectedSlot({
+      start_time: appointment.start_time,
+      end_time: appointment.end_time,
+      available: false
+    });
+    setShowEditModal(true);
+  };
+
+  // Salvar edição do agendamento
+  const handleSaveEdit = async (formData) => {
+    try {
+      const updatedData = {
+        ...formData,
+        date: formatDateForAPI(selectedDate)
+      };
+
+      logDebug('Atualizando agendamento:', updatedData);
+
+      await request(`${config.API_BASE_URL}/api/appointments/${editingAppointment.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedData)
+      });
+
+      setShowEditModal(false);
+      setEditingAppointment(null);
+      setSelectedSlot(null);
+      
+      setSuccess('Agendamento atualizado com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+
+      // Recarregar dados
+      await loadAppointments();
+      
+    } catch (error) {
+      logError('Erro ao atualizar agendamento:', error);
+      showError('Erro ao atualizar agendamento. Tente novamente.');
+    }
+  };
+
+  // Cancelar agendamento
+  const handleCancelAppointment = async (appointmentId, appointmentTitle) => {
+    const confirmed = window.confirm(`Tem certeza que deseja cancelar o agendamento "${appointmentTitle}"?`);
+    
+    if (!confirmed) return;
+
+    try {
+      logDebug('Cancelando agendamento:', appointmentId);
+
+      await request(`${config.API_BASE_URL}/api/appointments/${appointmentId}`, {
+        method: 'DELETE'
+      });
+
+      setSuccess('Agendamento cancelado com sucesso!');
+      setTimeout(() => setSuccess(null), 3000);
+
+      // Recarregar dados
+      await loadAppointments();
+      
+    } catch (error) {
+      logError('Erro ao cancelar agendamento:', error);
+      showError('Erro ao cancelar agendamento. Tente novamente.');
     }
   };
 
@@ -523,6 +808,41 @@ const AppFreePeriods = () => {
           </button>
         </div>
 
+        {/* Seletor de Sala */}
+        <div style={{ 
+          margin: '1rem 0', 
+          padding: '1rem', 
+          backgroundColor: '#f8f9fa', 
+          borderRadius: '8px',
+          border: '1px solid #ddd'
+        }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem', 
+            fontWeight: '600',
+            color: '#333'
+          }}>
+            Filtrar por Sala:
+          </label>
+          <select
+            value={selectedRoom}
+            onChange={(e) => setSelectedRoom(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.8rem',
+              border: '2px solid #e0e0e0',
+              borderRadius: '8px',
+              fontSize: '1rem',
+              backgroundColor: '#fff',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="todas">🏢🏠 Todas as Salas</option>
+            <option value="grande">🏢 Sala de Reunião Grande</option>
+            <option value="pequena">🏠 Sala de Reunião Pequena</option>
+          </select>
+        </div>
+
         {/* Loading state */}
         {loading && (
           <div className="loading">
@@ -547,17 +867,24 @@ const AppFreePeriods = () => {
         )}
 
         {/* Lista de agendamentos do dia */}
-        {appointments.length > 0 && (
+        {appointments.filter(app => selectedRoom === 'todas' || app.sala === selectedRoom).length > 0 && (
           <div style={{ marginBottom: '2rem' }}>
             <h3 style={{ marginBottom: '1rem', color: '#2a5298' }}>
-              Agendamentos do Dia ({appointments.length})
+              Agendamentos do Dia ({appointments.filter(app => selectedRoom === 'todas' || app.sala === selectedRoom).length})
+              {selectedRoom !== 'todas' && (
+                <span style={{ fontSize: '0.9rem', fontWeight: 'normal', color: '#666', marginLeft: '0.5rem' }}>
+                  - {selectedRoom === 'grande' ? 'Sala Grande' : 'Sala Pequena'}
+                </span>
+              )}
             </h3>
             <div style={{ 
               display: 'grid', 
               gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', 
               gap: '1rem' 
             }}>
-              {appointments.map((appointment) => (
+              {appointments
+                .filter(app => selectedRoom === 'todas' || app.sala === selectedRoom)
+                .map((appointment) => (
                 <div 
                   key={appointment.id} 
                   style={{
@@ -587,6 +914,63 @@ const AppFreePeriods = () => {
                       <strong>Descrição:</strong> {appointment.description}
                     </p>
                   )}
+                  {appointment.sala && (
+                    <p style={{ margin: '0.25rem 0', fontSize: '0.9rem' }}>
+                      <strong>Sala:</strong> {appointment.sala === 'grande' ? '🏢 Sala Grande' : '🏠 Sala Pequena'}
+                    </p>
+                  )}
+                  
+                  {/* Botões de ação */}
+                  <div style={{ 
+                    marginTop: '1rem', 
+                    display: 'flex', 
+                    gap: '0.5rem',
+                    borderTop: '1px solid #eee',
+                    paddingTop: '0.75rem'
+                  }}>
+                    <button
+                      onClick={() => handleEditAppointment(appointment)}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.25rem'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#0056b3'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#007bff'}
+                    >
+                      ✏️ Editar
+                    </button>
+                    <button
+                      onClick={() => handleCancelAppointment(appointment.id, appointment.title)}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem 1rem',
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.25rem'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#c82333'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+                    >
+                      🗑️ Cancelar
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -611,6 +995,16 @@ const AppFreePeriods = () => {
                   <div className="appointment-info">
                     <div className="appointment-title">{slot.appointment.title}</div>
                     <div className="appointment-name">{slot.appointment.name}</div>
+                    {slot.appointment.participants && (
+                      <div className="appointment-participants" style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                        👥 {slot.appointment.participants}
+                      </div>
+                    )}
+                    {slot.appointment.sala && (
+                      <div className="appointment-room" style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.2rem' }}>
+                        {slot.appointment.sala === 'grande' ? '🏢 Sala Grande' : '🏠 Sala Pequena'}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -628,6 +1022,19 @@ const AppFreePeriods = () => {
         }}
         selectedSlot={selectedSlot}
         onConfirm={handleCreateAppointment}
+        preSelectedRoom={selectedRoom !== 'todas' ? selectedRoom : 'grande'}
+      />
+
+      {/* Modal de edição */}
+      <EditModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingAppointment(null);
+          setSelectedSlot(null);
+        }}
+        appointment={editingAppointment}
+        onConfirm={handleSaveEdit}
       />
     </div>
   );
