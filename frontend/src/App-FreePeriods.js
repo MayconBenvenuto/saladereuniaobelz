@@ -265,8 +265,6 @@ const AppFreePeriods = () => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [slotsConfig, setSlotsConfig] = useState({
     start_hour: 8,
     end_hour: 20,
@@ -389,17 +387,6 @@ const AppFreePeriods = () => {
   // Verificar se a imagem está acessível
   useEffect(() => {
     console.log('Verificando acesso à imagem...');
-    
-    // Teste de acesso direto à imagem
-    const testImg = new Image();
-    testImg.onload = () => {
-      console.log('✅ Imagem sala.jpg acessível via /sala.jpg');
-    };
-    testImg.onerror = () => {
-      console.error('❌ Imagem sala.jpg NÃO acessível via /sala.jpg');
-      console.log('Verifique se o arquivo está em: frontend/public/sala.jpg');
-    };
-    testImg.src = '/sala.jpg';
   }, []);
 
   // Manipular seleção de slot
@@ -489,57 +476,6 @@ const AppFreePeriods = () => {
               onError={(e) => { e.target.style.display = 'none'; }}
             />
             <h1>Agende sua Reunião</h1>
-          </div>
-          <div className="room-image-container">
-            {!imageLoaded && !imageError && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                color: '#666',
-                fontSize: '1rem'
-              }}>
-                Carregando imagem...
-              </div>
-            )}
-            {imageError && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                color: '#fff',
-                background: 'rgba(255,0,0,0.8)',
-                padding: '1rem',
-                borderRadius: '8px',
-                textAlign: 'center'
-              }}>
-                Imagem da sala não encontrada
-                <br />
-                <small>Verifique se sala.jpg está em /public</small>
-              </div>
-            )}
-            <img 
-              src="/sala.jpg" 
-              alt="Sala de Reunião" 
-              className="room-image" 
-              style={{ display: imageError ? 'none' : 'block' }}
-              onLoad={() => {
-                console.log('Imagem carregada com sucesso');
-                setImageLoaded(true);
-                setImageError(false);
-              }}
-              onError={(e) => {
-                console.error('Erro ao carregar imagem sala.jpg');
-                setImageError(true);
-                setImageLoaded(false);
-              }}
-            />
-            <div className="room-overlay" style={{ display: imageLoaded ? 'block' : 'none' }}>
-              <h2>Sala de Reunião</h2>
-              <p>Agendamento inteligente com horários flexíveis</p>
-            </div>
           </div>
         </div>
       </div>

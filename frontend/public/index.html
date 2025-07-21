@@ -2,12 +2,13 @@
 <html lang="pt-br">
     <head>
         <meta charset="utf-8" />
+        <link rel="icon" href="%PUBLIC_URL%/logo-belz.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#1e40af" />
+        <meta name="description" content="Sistema de Agendamento de Sala de Reunião - Belz Corretora de Seguros" />
 
         <!-- Preload das imagens críticas para otimizar carregamento -->
         <link rel="preload" as="image" href="logo-belz.png" />
-        <link rel="preload" as="image" href="sala.jpg" />
 
         <!--
       manifest.json provides metadata used when your web app is installed on a
@@ -104,21 +105,6 @@
                 api_host: "https://us.i.posthog.com",
                 person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well
             });
-        </script>
-
-        <!-- Service Worker para cache de imagens -->
-        <script>
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('/sw-images.js')
-                        .then((registration) => {
-                            console.log('SW registrado: ', registration);
-                        })
-                        .catch((registrationError) => {
-                            console.log('SW falhou: ', registrationError);
-                        });
-                });
-            }
         </script>
     </body>
 </html>

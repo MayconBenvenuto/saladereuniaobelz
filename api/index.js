@@ -50,6 +50,10 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use(bodyParser.json());
 
+// Servir arquivos estáticos da pasta frontend/public
+const path = require('path');
+app.use(express.static(path.join(__dirname, '../frontend/public')));
+
 // Inicialização do cliente Supabase com configurações otimizadas
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;

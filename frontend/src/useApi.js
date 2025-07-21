@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import { config, logDebug, logError, logWarn } from './config';
-import { connectionMonitor } from './ConnectionMonitor';
 
 // Hook personalizado para requisições com retry e cache
 export const useApi = () => {
@@ -24,14 +23,13 @@ export const useApi = () => {
       setError(error?.message || 'Erro de conexão');
     };
 
-    connectionMonitor.on('online', handleOnline);
-    connectionMonitor.on('offline', handleOffline);
-    connectionMonitor.on('error', handleError);
+    // Usar event listeners nativos do browser
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
 
     return () => {
-      connectionMonitor.off('online', handleOnline);
-      connectionMonitor.off('offline', handleOffline);
-      connectionMonitor.off('error', handleError);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
