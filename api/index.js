@@ -9,16 +9,37 @@ console.log('🚀 BACKEND INICIANDO...');
 console.log('📅 Timestamp:', new Date().toISOString());
 console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
 console.log('📦 VERCEL:', !!process.env.VERCEL);
+console.log('🔍 VERCEL_ENV:', process.env.VERCEL_ENV);
+console.log('🔍 VERCEL_URL:', process.env.VERCEL_URL);
+console.log('🔍 VERCEL_REGION:', process.env.VERCEL_REGION);
 
 // Carregamento mais robusto das variáveis de ambiente
+console.log('🔧 INICIANDO CARREGAMENTO DE VARIÁVEIS DE AMBIENTE...');
+console.log('🔍 process.env.NODE_ENV:', process.env.NODE_ENV);
+console.log('🔍 process.env.VERCEL:', process.env.VERCEL);
+
 if (process.env.NODE_ENV !== 'production') {
   try {
-    console.log('🔍 Carregando variáveis de ambiente do arquivo .env');
+    console.log('🔍 Carregando variáveis de ambiente do arquivo .env (desenvolvimento)');
     require('dotenv').config();
     console.log('✅ Arquivo .env carregado com sucesso');
   } catch (error) {
     console.warn('⚠️ Erro ao carregar .env:', error.message);
   }
+} else {
+  console.log('🏭 AMBIENTE DE PRODUÇÃO - usando variáveis do sistema');
+}
+
+// Debug das variáveis de ambiente carregadas
+console.log('🔍 SUPABASE_URL disponível:', !!process.env.SUPABASE_URL);
+console.log('🔍 SUPABASE_KEY disponível:', !!process.env.SUPABASE_KEY);
+console.log('🔍 PORT disponível:', !!process.env.PORT);
+
+if (process.env.SUPABASE_URL) {
+  console.log('🔍 SUPABASE_URL preview:', process.env.SUPABASE_URL.substring(0, 30) + '...');
+}
+if (process.env.SUPABASE_KEY) {
+  console.log('🔍 SUPABASE_KEY preview:', process.env.SUPABASE_KEY.substring(0, 30) + '...');
 }
 
 // Inicializa o aplicativo Express
@@ -26,7 +47,9 @@ const app = express();
 console.log('✅ Express app criado');
 
 // Configuração CORS simplificada para produção
+console.log('🌐 CONFIGURANDO CORS...');
 if (process.env.NODE_ENV === 'production') {
+  console.log('🏭 Usando CORS para PRODUÇÃO');
   app.use(cors({
     origin: true,
     credentials: true,
@@ -35,6 +58,7 @@ if (process.env.NODE_ENV === 'production') {
     optionsSuccessStatus: 200
   }));
 } else {
+  console.log('🏠 Usando CORS para DESENVOLVIMENTO');
   app.use(cors({
     origin: ['http://localhost:3000', 'http://localhost:3001'],
     credentials: true,
@@ -50,6 +74,7 @@ if (process.env.NODE_ENV === 'production') {
     optionsSuccessStatus: 204
   }));
 }
+console.log('✅ CORS configurado');
 
 app.use(bodyParser.json());
 
@@ -64,6 +89,7 @@ let supabase = null;
 
 // Função para inicializar Supabase de forma segura
 function initializeSupabase() {
+  console.log('🗄️  INICIANDO CONFIGURAÇÃO DO SUPABASE...');
   try {
     console.log('🔍 Verificando variáveis de ambiente do Supabase...');
     console.log('🔍 SUPABASE_URL definida:', !!supabaseUrl);
@@ -73,6 +99,13 @@ function initializeSupabase() {
       console.log('⚠️ AVISO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas - rodando sem banco');
       console.log('🔍 SUPABASE_URL valor:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'undefined');
       console.log('🔍 SUPABASE_KEY valor:', supabaseKey ? supabaseKey.substring(0, 30) + '...' : 'undefined');
+      
+      // Em produção, isso é um erro crítico
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+        console.error('❌ ERRO CRÍTICO: Variáveis do Supabase não configuradas na Vercel!');
+        console.error('📋 Configure SUPABASE_URL e SUPABASE_KEY no painel da Vercel');
+      }
+      
       return null;
     }
     
@@ -93,18 +126,22 @@ function initializeSupabase() {
       }
     };
     
+    console.log('🔧 Criando cliente Supabase...');
     supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
     console.log('✅ Supabase inicializado com sucesso');
     console.log('🔍 Cliente Supabase tipo:', typeof supabase);
     return supabase;
   } catch (error) {
     console.error('❌ Erro ao inicializar Supabase:', error);
+    console.error('📋 Stack trace:', error.stack);
     return null;
   }
 }
 
 // Inicializar Supabase
+console.log('🚀 EXECUTANDO INICIALIZAÇÃO DO SUPABASE...');
 supabase = initializeSupabase();
+console.log('🔍 Resultado da inicialização - Supabase:', !!supabase);
 
 // Endpoint super simples para teste de conectividade - SEM DEPENDÊNCIAS
 app.get('/api/ping', (req, res) => {
@@ -113,13 +150,17 @@ app.get('/api/ping', (req, res) => {
     const response = {
       status: 'pong',
       timestamp: new Date().toISOString(),
-      message: 'API funcionando!'
+      message: 'API funcionando!',
+      environment: process.env.NODE_ENV || 'unknown',
+      vercel: !!process.env.VERCEL,
+      vercelEnv: process.env.VERCEL_ENV || 'none',
+      hasSupabase: !!supabase
     };
     console.log('✅ Ping response:', response);
     res.status(200).json(response);
   } catch (error) {
     console.error('❌ Erro no ping:', error);
-    res.status(500).json({ error: 'Erro interno' });
+    res.status(500).json({ error: 'Erro interno', details: error.message });
   }
 });
 
@@ -133,14 +174,50 @@ app.get('/api/health', (req, res) => {
       supabase: !!supabase,
       environment: process.env.NODE_ENV || 'unknown',
       vercel: !!process.env.VERCEL,
+      vercelEnv: process.env.VERCEL_ENV || 'none',
+      vercelUrl: process.env.VERCEL_URL || 'none',
+      vercelRegion: process.env.VERCEL_REGION || 'none',
       hasSupabaseUrl: !!process.env.SUPABASE_URL,
-      hasSupabaseKey: !!process.env.SUPABASE_KEY
+      hasSupabaseKey: !!process.env.SUPABASE_KEY,
+      nodeVersion: process.version,
+      platform: process.platform
     };
     console.log('✅ Health response:', response);
     res.status(200).json(response);
   } catch (error) {
     console.error('❌ Erro no health:', error);
-    res.status(500).json({ error: 'Erro interno' });
+    res.status(500).json({ error: 'Erro interno', details: error.message });
+  }
+});
+
+// Endpoint para debug das variáveis de ambiente (só em produção para diagnóstico)
+app.get('/api/debug-env', (req, res) => {
+  try {
+    console.log('🔍 Debug endpoint chamado');
+    
+    // Verificar se está em produção para permitir debug temporário
+    const envDebug = {
+      timestamp: new Date().toISOString(),
+      nodeEnv: process.env.NODE_ENV,
+      vercel: !!process.env.VERCEL,
+      vercelEnv: process.env.VERCEL_ENV,
+      vercelUrl: process.env.VERCEL_URL,
+      vercelRegion: process.env.VERCEL_REGION,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      hasSupabaseKey: !!process.env.SUPABASE_KEY,
+      supabaseInitialized: !!supabase,
+      nodeVersion: process.version,
+      platform: process.platform,
+      // CUIDADO: Nunca expor valores reais em produção
+      supabaseUrlPreview: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 30) + '...' : 'undefined',
+      supabaseKeyPreview: process.env.SUPABASE_KEY ? process.env.SUPABASE_KEY.substring(0, 30) + '...' : 'undefined'
+    };
+    
+    console.log('✅ Debug info:', envDebug);
+    res.status(200).json(envDebug);
+  } catch (error) {
+    console.error('❌ Erro no debug endpoint:', error);
+    res.status(500).json({ error: 'Erro interno', details: error.message });
   }
 });
 
