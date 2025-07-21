@@ -9,7 +9,7 @@
     "dev": "concurrently \"npm start\" \"cd frontend; npm start\"",
     "install-all": "npm install; cd frontend; npm install",
     "vercel-build": "npm install; cd frontend; npm install; npm run build",
-    "test-connection": "node test-connection-fix.js"
+    "test-connection": "node test-connection.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",

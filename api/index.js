@@ -13,12 +13,17 @@ console.log('📦 VERCEL:', !!process.env.VERCEL);
 // Carregamento mais robusto das variáveis de ambiente
 if (process.env.NODE_ENV !== 'production') {
   try {
-    const envPath = path.join(__dirname, '..', '.env');
-    console.log('🔍 Carregando .env de:', envPath);
-    require('dotenv').config({ path: envPath });
-    console.log('✅ Arquivo .env carregado com sucesso');
+    // dotenv-expand permite variáveis aninhadas como ${SUPABASE_URL}
+    const dotenv = require('dotenv');
+    const dotenvExpand = require('dotenv-expand');
+
+    // Carrega .env e .env.local (padrão do dotenv)
+    const myEnv = dotenv.config();
+    dotenvExpand.expand(myEnv);
+    
+    console.log('✅ Variáveis de ambiente locais carregadas');
   } catch (error) {
-    console.warn('⚠️ Erro ao carregar .env:', error.message);
+    console.warn('⚠️ Erro ao carregar arquivos .env:', error.message);
   }
 }
 
