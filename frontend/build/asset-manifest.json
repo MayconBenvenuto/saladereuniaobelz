@@ -1,13 +1,14 @@
 {
   "files": {
-    "main.css": "/static/css/main.eb30c586.css",
-    "main.js": "/static/js/main.e0d85b85.js",
+    "main.css": "/static/css/main.351a0a98.css",
+    "main.js": "/static/js/main.4a5b2db6.js",
     "static/js/103.6553fd58.js": "/static/js/103.6553fd58.js",
+    "static/media/sala.svg": "/static/media/sala.42413a889fd0d6aa6d79.svg",
     "index.html": "/index.html"
   },
   "entrypoints": [
     "static/js/103.6553fd58.js",
-    "static/css/main.eb30c586.css",
-    "static/js/main.e0d85b85.js"
+    "static/css/main.351a0a98.css",
+    "static/js/main.4a5b2db6.js"
   ]
 }
