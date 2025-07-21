@@ -21,8 +21,8 @@ export const config = {
   API_BASE_URL,
   
   // Timeouts otimizados para melhor performance
-  API_TIMEOUT: 25000, // 25 segundos inicial (aumentado para Vercel)
-  API_RETRY_TIMEOUT: 35000, // 35 segundos no retry (aumentado)
+  API_TIMEOUT: 8000, // 8 segundos inicial
+  API_RETRY_TIMEOUT: 12000, // 12 segundos no retry
   
   // Cache melhorado
   CACHE_DURATION: 3 * 60 * 1000, // 3 minutos (reduzido para dados mais frescos)
@@ -37,7 +37,7 @@ export const config = {
   PREFETCH_NEXT_DAY: true, // Pré-carregar próximo dia
   
   // Logs
-  DEBUG: process.env.NODE_ENV === 'development'
+  DEBUG: true // Habilitado também em produção para diagnóstico
 };
 
 export const logDebug = (...args) => {

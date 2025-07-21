@@ -63,8 +63,14 @@ let supabase = null;
 // Função para inicializar Supabase de forma segura
 function initializeSupabase() {
   try {
+    console.log('🔍 Verificando variáveis de ambiente do Supabase...');
+    console.log('🔍 SUPABASE_URL definida:', !!supabaseUrl);
+    console.log('🔍 SUPABASE_KEY definida:', !!supabaseKey);
+    
     if (!supabaseUrl || !supabaseKey) {
       console.log('⚠️ AVISO: Variáveis SUPABASE_URL ou SUPABASE_KEY não definidas - rodando sem banco');
+      console.log('🔍 SUPABASE_URL valor:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'undefined');
+      console.log('🔍 SUPABASE_KEY valor:', supabaseKey ? supabaseKey.substring(0, 30) + '...' : 'undefined');
       return null;
     }
     
@@ -129,6 +135,50 @@ app.get('/api/health', (req, res) => {
   } catch (error) {
     console.error('❌ Erro no health:', error);
     res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
+// Endpoint para testar conexão específica do Supabase
+app.get('/api/test-supabase', async (req, res) => {
+  try {
+    console.log('🧪 Testando conexão Supabase...');
+    
+    if (!supabase) {
+      return res.status(500).json({ 
+        error: 'Supabase não inicializado',
+        hasUrl: !!process.env.SUPABASE_URL,
+        hasKey: !!process.env.SUPABASE_KEY,
+        urlPreview: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.substring(0, 30) + '...' : 'undefined'
+      });
+    }
+
+    // Teste simples de conexão com timeout curto
+    const { data, error } = await Promise.race([
+      supabase.from('agendamentos').select('count').limit(1),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout na conexão Supabase')), 5000))
+    ]);
+
+    if (error) {
+      console.error('❌ Erro na conexão Supabase:', error);
+      return res.status(500).json({ 
+        error: 'Erro na conexão Supabase', 
+        details: error.message,
+        code: error.code 
+      });
+    }
+
+    console.log('✅ Conexão Supabase OK');
+    res.json({ 
+      status: 'Supabase conectado com sucesso', 
+      timestamp: new Date().toISOString() 
+    });
+
+  } catch (error) {
+    console.error('❌ Erro no teste Supabase:', error);
+    res.status(500).json({ 
+      error: 'Erro no teste Supabase', 
+      message: error.message 
+    });
   }
 });
 // Todas as suas operações estão usando o cliente 'supabase-js'.
