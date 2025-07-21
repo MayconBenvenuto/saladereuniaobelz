@@ -2,7 +2,7 @@
   "name": "saladereuniaobelz",
   "description": "Sistema de Agendamento de Sala de Reunião - Belz Corretora de Seguros",
   "version": "1.0.0",
-  "main": "api/vercel.js",
+  "main": "api/index.js",
   "scripts": {
     "start": "node api/index.js",
     "build": "cd frontend && npm install && npm run build",
