@@ -1,17 +1,36 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const path = require('path');
 
 const app = express();
 
-// CORS
-app.use(cors());
+// CORS mais específico
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
+
+// Servir arquivos estáticos do frontend
+app.use(express.static(path.join(__dirname, '../frontend/build')));
 
 // Supabase
 let supabase = null;
 if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+  supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false
+    }
+  });
+  console.log('✅ Supabase inicializado');
+} else {
+  console.warn('⚠️ Supabase não configurado - variáveis de ambiente ausentes');
 }
 
 // Ping endpoint
@@ -55,6 +74,42 @@ app.get('/api/appointments', async (req, res) => {
       
     if (error) throw error;
     res.json(data || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get availability for a date
+app.get('/api/availability/:date', async (req, res) => {
+  const { date } = req.params;
+  
+  if (!supabase) {
+    // Return mock data if no database
+    return res.json({
+      date,
+      occupied: [],
+      available: ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
+    });
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('agendamentos')
+      .select('start_time, end_time')
+      .eq('date', date);
+      
+    if (error) throw error;
+    
+    const occupied = data.map(app => ({
+      start: app.start_time,
+      end: app.end_time
+    }));
+    
+    res.json({
+      date,
+      occupied,
+      available: generateAvailableSlots(occupied)
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -129,9 +184,35 @@ app.put('/api/appointments/:id', async (req, res) => {
   }
 });
 
-// Default route
+// Função auxiliar para gerar horários disponíveis
+function generateAvailableSlots(occupied) {
+  const businessHours = [
+    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+    '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00'
+  ];
+
+  return businessHours.filter(slot => {
+    return !occupied.some(appointment => {
+      const slotTime = slot + ':00';
+      return slotTime >= appointment.start && slotTime < appointment.end;
+    });
+  });
+}
+
+// Rota para servir o frontend (todas as rotas não-API)
+app.get('*', (req, res) => {
+  // Se é uma rota de API que não existe, retorna erro
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // Serve o index.html do frontend para todas as outras rotas
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+});
+
+// Default route (fallback)
 app.get('/', (req, res) => {
-  res.json({ message: 'API is running' });
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
 // For development
