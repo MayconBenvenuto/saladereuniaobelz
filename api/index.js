@@ -2,6 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
 console.log('🚀 BACKEND INICIANDO...');
@@ -12,9 +13,12 @@ console.log('📦 VERCEL:', !!process.env.VERCEL);
 // Carregamento mais robusto das variáveis de ambiente
 if (process.env.NODE_ENV !== 'production') {
   try {
-    require('dotenv').config();
+    const envPath = path.join(__dirname, '..', '.env');
+    console.log('🔍 Carregando .env de:', envPath);
+    require('dotenv').config({ path: envPath });
+    console.log('✅ Arquivo .env carregado com sucesso');
   } catch (error) {
-    console.warn('⚠️ Dotenv não carregado:', error.message);
+    console.warn('⚠️ Erro ao carregar .env:', error.message);
   }
 }
 
@@ -51,7 +55,6 @@ if (process.env.NODE_ENV === 'production') {
 app.use(bodyParser.json());
 
 // Servir arquivos estáticos da pasta frontend/public
-const path = require('path');
 app.use(express.static(path.join(__dirname, '../frontend/public')));
 
 // Inicialização do cliente Supabase com configurações otimizadas
@@ -74,6 +77,9 @@ function initializeSupabase() {
       return null;
     }
     
+    console.log('🔍 URL Preview:', supabaseUrl);
+    console.log('🔍 Key Preview:', supabaseKey.substring(0, 50) + '...');
+    
     // Configurações otimizadas do cliente Supabase
     const supabaseOptions = {
       auth: {
@@ -90,6 +96,7 @@ function initializeSupabase() {
     
     supabase = createClient(supabaseUrl, supabaseKey, supabaseOptions);
     console.log('✅ Supabase inicializado com sucesso');
+    console.log('🔍 Cliente Supabase tipo:', typeof supabase);
     return supabase;
   } catch (error) {
     console.error('❌ Erro ao inicializar Supabase:', error);
@@ -154,7 +161,7 @@ app.get('/api/test-supabase', async (req, res) => {
 
     // Teste simples de conexão com timeout curto
     const { data, error } = await Promise.race([
-      supabase.from('agendamentos').select('count').limit(1),
+      supabase.from('agendamentos').select('id').limit(1),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout na conexão Supabase')), 5000))
     ]);
 
