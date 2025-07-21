@@ -200,17 +200,6 @@ function generateAvailableSlots(occupied) {
   });
 }
 
-// Rota para servir o frontend (todas as rotas não-API)
-app.get('*', (req, res) => {
-  // Se é uma rota de API que não existe, retorna erro
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API endpoint not found' });
-  }
-  
-  // Serve o index.html do frontend para todas as outras rotas
-  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
-});
-
 // Default route (fallback)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
