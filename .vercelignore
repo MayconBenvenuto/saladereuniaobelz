@@ -1,12 +1,20 @@
 # Node modules
-node_modules
-frontend/node_modules
+node_modules/
+frontend/node_modules/
+**/node_modules/
+
+# Build outputs
+frontend/build/
+.next/
+dist/
+out/
 
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
 # Environment files
 .env.local
@@ -14,20 +22,44 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Cache
+.npm
+.yarn/cache
+.pnp
+.pnp.js
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
 # Scripts de teste e diagnóstico
 test-*.js
 diagnose-*.js
 setup-*.js
+api-test.js
+test-connection.js
 
 # Documentação desnecessária
-BUILD-FIX-FINAL.md
-DEPLOY-GUIDE.md
-DEPLOY.md
-FIX-404-FINAL.md
-SETUP-DATABASE-GUIDE.md
-SUMMARY.md
-README.md
-test_result.md
+*.md
+!README.md
+
+# Database local
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.backup
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
 
 # Arquivos temporários
 .DS_Store
