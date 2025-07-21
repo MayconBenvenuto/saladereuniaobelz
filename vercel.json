@@ -9,14 +9,14 @@
       }
     },
     {
-      "src": "api/minimal.js",
+      "src": "api/vercel.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/minimal.js"
+      "dest": "/api/vercel.js"
     },
     {
       "src": "/(.*)",
