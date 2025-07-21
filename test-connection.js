@@ -1,5 +1,5 @@
 // test-connection.js
-require('dotenv').config({ path: './.env.local' });
+require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
 const supabaseUrl = process.env.SUPABASE_URL;

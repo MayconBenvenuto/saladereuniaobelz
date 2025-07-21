@@ -9,7 +9,8 @@
     "dev": "concurrently \"npm start\" \"cd frontend; npm start\"",
     "install-all": "npm install; cd frontend; npm install",
     "vercel-build": "npm install; cd frontend; npm install; npm run build",
-    "test-connection": "node test-connection.js"
+    "test-connection": "node test-connection.js",
+    "test": "node api-test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.51.0",
@@ -21,7 +22,8 @@
     "serverless-http": "^3.2.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "dotenv-cli": "^8.0.0"
   },
   "engines": {
     "node": ">=18.x"
