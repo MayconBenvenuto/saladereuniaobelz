@@ -42,8 +42,8 @@ export const useApi = () => {
     
     for (let i = 0; i < maxRetries; i++) {
       try {
-        // Timeout progressivo mais generoso
-        const timeout = config.API_TIMEOUT + (i * 5000); // Aumenta 5s a cada tentativa
+        // Timeout diferenciado para primeira tentativa e retries
+        const timeout = i === 0 ? config.API_TIMEOUT : config.API_RETRY_TIMEOUT;
         
         logDebug(`Fazendo requisição para: ${url} (tentativa ${i + 1}/${maxRetries}) - timeout: ${timeout}ms`);
         
