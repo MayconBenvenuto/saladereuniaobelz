@@ -1,66 +1,80 @@
 // Adaptador para rodar Express como Serverless Function na Vercel
-const serverless = require('serverless-http');
-
 console.log('🚀 VERCEL.JS INICIANDO...');
 console.log('📅 Timestamp:', new Date().toISOString());
-console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
-console.log('📦 VERCEL:', !!process.env.VERCEL);
-console.log('🔍 VERCEL_ENV:', process.env.VERCEL_ENV);
-console.log('🔍 VERCEL_URL:', process.env.VERCEL_URL);
-console.log('🔍 VERCEL_REGION:', process.env.VERCEL_REGION);
-console.log('🔍 Variáveis de ambiente disponíveis:');
-console.log('   - SUPABASE_URL:', !!process.env.SUPABASE_URL);
-console.log('   - SUPABASE_KEY:', !!process.env.SUPABASE_KEY);
 
-// Importar o app Express
+// Timeout de 5 segundos para inicialização
+const INIT_TIMEOUT = 5000;
+
 let app;
-try {
-  console.log('📂 Importando ./index.js...');
-  app = require('./index');
-  console.log('✅ App Express carregado com sucesso');
-  console.log('🔍 Tipo do app:', typeof app);
-  console.log('🔍 App tem handle?', !!app.handle);
-  console.log('🔍 App é função?', typeof app === 'function');
-  
-  // Verificar se o app foi exportado corretamente
-  if (!app || (typeof app !== 'function' && !app.handle)) {
-    console.error('❌ App não é um Express app válido:', typeof app);
-    throw new Error('App Express inválido');
+const initPromise = new Promise((resolve, reject) => {
+  const timer = setTimeout(() => {
+    reject(new Error('Timeout na inicialização do app Express'));
+  }, INIT_TIMEOUT);
+
+  try {
+    console.log('🌍 NODE_ENV:', process.env.NODE_ENV);
+    console.log('� VERCEL:', !!process.env.VERCEL);
+    console.log('🔍 VERCEL_ENV:', process.env.VERCEL_ENV);
+    console.log('🔍 Variáveis de ambiente disponíveis:');
+    console.log('   - SUPABASE_URL:', !!process.env.SUPABASE_URL);
+    console.log('   - SUPABASE_KEY:', !!process.env.SUPABASE_KEY);
+
+    console.log('📂 Importando ./index.js...');
+    app = require('./index');
+    console.log('✅ App Express carregado com sucesso');
+    
+    clearTimeout(timer);
+    resolve(app);
+  } catch (error) {
+    clearTimeout(timer);
+    console.error('❌ Erro ao carregar app Express:', error);
+    reject(error);
   }
-  
-} catch (error) {
-  console.error('❌ Erro ao carregar app Express:', error);
-  console.error('📋 Stack:', error.stack);
-  throw error;
-}
+});
 
-console.log('⚙️ Configurando handler serverless...');
-
-// Configurar o handler serverless de forma mais simples
-const handler = serverless(app);
-
-console.log('✅ Handler configurado com sucesso');
-console.log('🔍 Handler tipo:', typeof handler);
-
-// Função wrapper para logs adicionais
-const wrappedHandler = async (req, res) => {
+// Handler principal com fallback
+module.exports = async (req, res) => {
   console.log('📨 Nova requisição recebida:', {
     method: req.method,
     url: req.url,
-    headers: Object.keys(req.headers || {}),
     timestamp: new Date().toISOString()
   });
-  
+
   try {
-    const result = await handler(req, res);
-    console.log('✅ Requisição processada com sucesso');
-    return result;
+    // Aguardar inicialização com timeout
+    const expressApp = await Promise.race([
+      initPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout aguardando app')), 10000)
+      )
+    ]);
+
+    // Se chegou até aqui, usar o serverless handler
+    const serverless = require('serverless-http');
+    const handler = serverless(expressApp);
+    
+    return await handler(req, res);
+    
   } catch (error) {
-    console.error('❌ Erro ao processar requisição:', error);
-    console.error('📋 Stack:', error.stack);
-    throw error;
+    console.error('❌ Erro crítico na função:', error);
+    
+    // Fallback: resposta de emergência
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    const fallbackResponse = {
+      error: 'Erro na inicialização da API',
+      details: error.message,
+      timestamp: new Date().toISOString(),
+      fallback: true,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: !!process.env.VERCEL,
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasSupabaseKey: !!process.env.SUPABASE_KEY
+      }
+    };
+    
+    return res.status(500).json(fallbackResponse);
   }
 };
-
-console.log('🎯 Exportando handler final...');
-module.exports = wrappedHandler;

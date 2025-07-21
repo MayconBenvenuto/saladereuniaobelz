@@ -1,5 +1,10 @@
 {
   "version": 2,
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 30
+    }
+  },
   "builds": [
     {
       "src": "package.json",
@@ -11,9 +16,17 @@
     {
       "src": "api/vercel.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/simple.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/simple",
+      "dest": "/api/simple.js"
+    },
     {
       "src": "/api/(.*)",
       "dest": "/api/vercel.js"
