@@ -1025,7 +1025,7 @@ const AppFreePeriods = () => {
                     borderTop: '1px solid #eee',
                     paddingTop: '0.75rem'
                   }}>
-                    <button
+                    {/*<button
                       onClick={() => handleEditAppointment(appointment)}
                       style={{
                         flex: 1,
@@ -1045,7 +1045,7 @@ const AppFreePeriods = () => {
                       onMouseOut={(e) => e.target.style.backgroundColor = '#007bff'}
                     >
                       ✏️ Editar
-                    </button>
+                    </button>*/}
                     <button
                       onClick={() => handleCancelAppointment(appointment.id, appointment.title)}
                       style={{
