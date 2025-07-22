@@ -40,7 +40,7 @@ export const config = {
   DEBUG: true, // Habilitado também em produção para diagnóstico
   
   // Segurança
-  CANCEL_PASSWORD: 'belzCancelamento@', // Senha para cancelamento de reuniões
+  CANCEL_PASSWORD: process.env.PASSWORD_CANCEL, // Senha para cancelamento de reuniões
   MAX_PASSWORD_ATTEMPTS: 3, // Máximo de tentativas de senha
   PASSWORD_TIMEOUT: 5 * 60 * 1000 // 5 minutos de bloqueio após exceder tentativas
 };

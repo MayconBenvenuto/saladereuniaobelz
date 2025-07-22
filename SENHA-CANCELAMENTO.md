@@ -29,7 +29,7 @@
 
 ```javascript
 // Segurança
-CANCEL_PASSWORD: 'BELZ2025', // Senha para cancelamento de reuniões
+CANCEL_PASSWORD: '###', // Senha para cancelamento de reuniões
 MAX_PASSWORD_ATTEMPTS: 3, // Máximo de tentativas de senha
 PASSWORD_TIMEOUT: 5 * 60 * 1000 // 5 minutos de bloqueio
 ```
