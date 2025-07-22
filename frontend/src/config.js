@@ -40,7 +40,7 @@ export const config = {
   DEBUG: true, // Habilitado também em produção para diagnóstico
   
   // Segurança
-  CANCEL_PASSWORD: process.env.PASSWORD_CANCEL, // Senha para cancelamento de reuniões
+  CANCEL_PASSWORD: process.env.REACT_APP_PASSWORD_CANCEL || process.env.PASSWORD_CANCEL, // Senha para cancelamento de reuniões
   MAX_PASSWORD_ATTEMPTS: 3, // Máximo de tentativas de senha
   PASSWORD_TIMEOUT: 5 * 60 * 1000 // 5 minutos de bloqueio após exceder tentativas
 };
@@ -64,4 +64,7 @@ if (typeof window !== 'undefined') {
   console.log('[CONFIG] Environment:', process.env.NODE_ENV);
   console.log('[CONFIG] API Base URL:', config.API_BASE_URL);
   console.log('[CONFIG] Current Origin:', window.location.origin);
+  console.log('[CONFIG] Cancel Password Configured:', config.CANCEL_PASSWORD ? '✅ Yes' : '❌ No');
+  console.log('[CONFIG] Max Password Attempts:', config.MAX_PASSWORD_ATTEMPTS);
+  console.log('[CONFIG] Password Timeout:', config.PASSWORD_TIMEOUT / (1000 * 60), 'minutes');
 }

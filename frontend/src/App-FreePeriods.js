@@ -506,6 +506,13 @@ const AppFreePeriods = () => {
 
   // Função para verificar senha de cancelamento
   const verifyPassword = (inputPassword) => {
+    // Debug logs
+    logDebug('Verificando senha de cancelamento...');
+    logDebug('Senha digitada:', inputPassword);
+    logDebug('Senha configurada:', config.CANCEL_PASSWORD);
+    logDebug('process.env.PASSWORD_CANCEL:', process.env.PASSWORD_CANCEL);
+    logDebug('process.env.REACT_APP_PASSWORD_CANCEL:', process.env.REACT_APP_PASSWORD_CANCEL);
+    
     // Verificar se está bloqueado
     if (passwordBlocked) {
       const remainingTime = blockExpiration ? Math.ceil((blockExpiration - Date.now()) / (1000 * 60)) : 0;
@@ -516,6 +523,7 @@ const AppFreePeriods = () => {
     // Verificar senha
     if (inputPassword === config.CANCEL_PASSWORD) {
       // Senha correta - resetar tentativas
+      logDebug('✅ Senha correta!');
       setPasswordAttempts(0);
       return true;
     } else {

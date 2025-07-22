@@ -1,4 +1,13 @@
-# 🔐 Sistema de Senha para Cancelamento de Reuniões
+# 🔐 Sistema de Senha para ### 🔧 Configurações (arquivo config.js)
+
+```javascript
+// Segurança
+CANCEL_PASSWORD: process.env.PASSWORD_CANCEL, // Senha para cancelamento de reuniões
+MAX_PASSWORD_ATTEMPTS: 3, // Máximo de tentativas de senha
+PASSWORD_TIMEOUT: 5 * 60 * 1000 // 5 minutos de bloqueio
+```
+
+**Senha atual configurada:** `belzCancelamento@` (definida no arquivo .env)ento de Reuniões
 
 ## Implementação Concluída
 
@@ -61,12 +70,23 @@ PASSWORD_TIMEOUT: 5 * 60 * 1000 // 5 minutos de bloqueio
 
 ### 🔄 Como Alterar a Senha
 
-Para alterar a senha padrão:
+Para alterar a senha atual:
 
-1. Abra o arquivo `frontend/src/config.js`
-2. Localize a linha: `CANCEL_PASSWORD: 'BELZ2025'`
-3. Altere para a senha desejada
-4. Reinicie a aplicação
+1. **Para desenvolvimento local:**
+   - Abra o arquivo `.env` na raiz do projeto
+   - E também o arquivo `frontend/.env`
+   - Altere as linhas:
+     ```
+     PASSWORD_CANCEL=novaSenha123
+     REACT_APP_PASSWORD_CANCEL=novaSenha123
+     ```
+
+2. **Para produção (Vercel):**
+   - Configure a variável `REACT_APP_PASSWORD_CANCEL` no painel da Vercel
+
+3. Reinicie a aplicação frontend
+
+**Importante:** O React só reconhece variáveis de ambiente que começam com `REACT_APP_`. Por isso usamos `REACT_APP_PASSWORD_CANCEL`.
 
 ### 📝 Exemplo de Uso
 
