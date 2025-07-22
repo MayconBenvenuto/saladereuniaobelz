@@ -473,6 +473,12 @@ const AppFreePeriods = () => {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [editingAppointment, setEditingAppointment] = useState(null);
   const [success, setSuccess] = useState(null);
+  
+  // Estados para controle de senha de cancelamento
+  const [passwordAttempts, setPasswordAttempts] = useState(0);
+  const [passwordBlocked, setPasswordBlocked] = useState(false);
+  const [blockExpiration, setBlockExpiration] = useState(null);
+  
   const [slotsConfig, setSlotsConfig] = useState({
     start_hour: 8,
     end_hour: 20,
@@ -481,6 +487,57 @@ const AppFreePeriods = () => {
   
   // Hook personalizado para API
   const { loading, error, request, setError } = useApi();
+
+  // Função para verificar e resetar bloqueio de senha
+  const checkPasswordBlock = useCallback(() => {
+    if (passwordBlocked && blockExpiration && Date.now() > blockExpiration) {
+      setPasswordBlocked(false);
+      setPasswordAttempts(0);
+      setBlockExpiration(null);
+      logDebug('Bloqueio de senha expirado e resetado');
+    }
+  }, [passwordBlocked, blockExpiration]);
+
+  // Verificar bloqueio a cada minuto
+  useEffect(() => {
+    const interval = setInterval(checkPasswordBlock, 60000);
+    return () => clearInterval(interval);
+  }, [checkPasswordBlock]);
+
+  // Função para verificar senha de cancelamento
+  const verifyPassword = (inputPassword) => {
+    // Verificar se está bloqueado
+    if (passwordBlocked) {
+      const remainingTime = blockExpiration ? Math.ceil((blockExpiration - Date.now()) / (1000 * 60)) : 0;
+      alert(`❌ Muitas tentativas incorretas!\nTente novamente em ${remainingTime} minuto(s).`);
+      return false;
+    }
+
+    // Verificar senha
+    if (inputPassword === config.CANCEL_PASSWORD) {
+      // Senha correta - resetar tentativas
+      setPasswordAttempts(0);
+      return true;
+    } else {
+      // Senha incorreta - incrementar tentativas
+      const newAttempts = passwordAttempts + 1;
+      setPasswordAttempts(newAttempts);
+      
+      if (newAttempts >= config.MAX_PASSWORD_ATTEMPTS) {
+        // Bloquear por tempo determinado
+        const expiration = Date.now() + config.PASSWORD_TIMEOUT;
+        setPasswordBlocked(true);
+        setBlockExpiration(expiration);
+        
+        alert(`❌ Senha incorreta!\nMuitas tentativas falharam. Sistema bloqueado por ${config.PASSWORD_TIMEOUT / (1000 * 60)} minutos.`);
+      } else {
+        const remaining = config.MAX_PASSWORD_ATTEMPTS - newAttempts;
+        alert(`❌ Senha incorreta!\nRestam ${remaining} tentativa(s) antes do bloqueio temporário.`);
+      }
+      
+      return false;
+    }
+  };
 
   // Format date for API calls
   const formatDateForAPI = (date) => {
@@ -718,9 +775,46 @@ const AppFreePeriods = () => {
 
   // Cancelar agendamento
   const handleCancelAppointment = async (appointmentId, appointmentTitle) => {
-    const confirmed = window.confirm(`Tem certeza que deseja cancelar o agendamento "${appointmentTitle}"?`);
+    // Verificar se está bloqueado primeiro
+    checkPasswordBlock();
     
-    if (!confirmed) return;
+    if (passwordBlocked) {
+      const remainingTime = blockExpiration ? Math.ceil((blockExpiration - Date.now()) / (1000 * 60)) : 0;
+      alert(`❌ Sistema bloqueado!\nMuitas tentativas incorretas de senha.\nTente novamente em ${remainingTime} minuto(s).`);
+      return;
+    }
+
+    // Solicitar senha
+    const password = prompt(
+      `🔐 CANCELAMENTO DE REUNIÃO\n\n` +
+      `Reunião: "${appointmentTitle}"\n\n` +
+      `Para prosseguir com o cancelamento, digite a senha de autorização:\n\n` +
+      `⚠️  Esta ação não pode ser desfeita!`
+    );
+    
+    // Verificar se o usuário cancelou o prompt
+    if (password === null) {
+      logDebug('Cancelamento abortado pelo usuário');
+      return;
+    }
+    
+    // Verificar senha
+    if (!verifyPassword(password)) {
+      logDebug('Senha incorreta fornecida para cancelamento');
+      return;
+    }
+    
+    // Confirmação adicional após senha correta
+    const confirmed = window.confirm(
+      `✅ Senha autorizada!\n\n` +
+      `Confirma o cancelamento da reunião "${appointmentTitle}"?\n\n` +
+      `⚠️  Esta ação é irreversível!`
+    );
+    
+    if (!confirmed) {
+      logDebug('Cancelamento confirmado, mas usuário desistiu na confirmação final');
+      return;
+    }
 
     try {
       logDebug('Cancelando agendamento:', appointmentId);
@@ -729,8 +823,11 @@ const AppFreePeriods = () => {
         method: 'DELETE'
       });
 
-      setSuccess('Agendamento cancelado com sucesso!');
-      setTimeout(() => setSuccess(null), 3000);
+      setSuccess(`✅ Reunião "${appointmentTitle}" cancelada com sucesso!`);
+      setTimeout(() => setSuccess(null), 4000);
+
+      // Log de auditoria
+      console.log(`[AUDIT] Reunião cancelada: ID=${appointmentId}, Título="${appointmentTitle}", Timestamp=${new Date().toLocaleString('pt-BR')}`);
 
       // Recarregar dados
       await loadAppointments();

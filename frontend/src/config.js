@@ -37,7 +37,12 @@ export const config = {
   PREFETCH_NEXT_DAY: true, // Pré-carregar próximo dia
   
   // Logs
-  DEBUG: true // Habilitado também em produção para diagnóstico
+  DEBUG: true, // Habilitado também em produção para diagnóstico
+  
+  // Segurança
+  CANCEL_PASSWORD: 'belzCancelamento@', // Senha para cancelamento de reuniões
+  MAX_PASSWORD_ATTEMPTS: 3, // Máximo de tentativas de senha
+  PASSWORD_TIMEOUT: 5 * 60 * 1000 // 5 minutos de bloqueio após exceder tentativas
 };
 
 export const logDebug = (...args) => {
